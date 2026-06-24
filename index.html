@@ -162,6 +162,7 @@ function checkStickers(k){
 }
 
 let _memFallback = false;
+const PARENT_CODE = "246810";  // 6-digit code to enter the Parent area
 let DB = load();
 function load(){
   try{
@@ -234,7 +235,7 @@ function screenProfiles(){
       <p class="center muted" style="margin:6px 0 16px;font-size:14px">Tap your name to start</p>
       <div class="grid3">${kids}${addBtn}</div>
     </div>
-    ${DB.kids.length?`<button class="btn ghost sm" onclick="screenManage()">Parent area</button>`:""}
+    ${DB.kids.length?`<button class="btn ghost sm" onclick="parentGate()">Parent area</button>`:""}
   `;
 }
 
@@ -1019,23 +1020,61 @@ function popEnd(){
     </div>`;
 }
 
-/* ---- Parent area ---- */
+/* ---- Parent area (code-protected) ---- */
+function parentGate(){
+  session.parentEntry="";
+  drawParentGate("");
+}
+function drawParentGate(msg){
+  const dots=[0,1,2,3,4,5].map(i=>`<div class="dot ${i<session.parentEntry.length?'on':''}"></div>`).join("");
+  const keys=[1,2,3,4,5,6,7,8,9,"x",0,"⌫"].map(n=>{
+    if(n==="x") return `<div></div>`;
+    return `<button class="key" onclick="parentKey('${n}')">${n}</button>`;
+  }).join("");
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button><div class="spacer"></div></div>
+    <div class="card center">
+      <div style="font-size:44px">🔒</div>
+      <h2>Parent area</h2>
+      <p class="muted" style="font-size:14px">Enter the 6-digit parent code</p>
+      <div class="pin-dots">${dots}</div>
+      ${msg?`<p class="feedback bad" style="min-height:0;margin:0 0 10px">${msg}</p>`:''}
+      <div class="pad">${keys}</div>
+    </div>`;
+}
+function parentKey(n){
+  if(n==="⌫"){ session.parentEntry=session.parentEntry.slice(0,-1); return drawParentGate(""); }
+  if(session.parentEntry.length>=6) return;
+  session.parentEntry+=n;
+  if(session.parentEntry.length===6){
+    if(session.parentEntry===PARENT_CODE){ screenManage(); }
+    else { session.parentEntry=""; setTimeout(()=>drawParentGate("Wrong code, try again"),120); }
+    return;
+  }
+  drawParentGate("");
+}
+
 function screenManage(){
   const list=DB.kids.map(k=>`
     <div class="statline">
-      <span>${k.avatar} ${esc(k.name)} <span class="muted">· PIN ${k.pin} · ⭐${k.stars}</span></span>
-      <button class="chip" onclick="delKid('${k.id}')">Remove</button>
+      <span>${k.avatar} ${esc(k.name)} <span class="muted">· ⭐${k.stars}</span></span>
+      <span><button class="chip" onclick="togglePin('${k.id}',this)" data-pin="${k.pin}">Show PIN</button>
+      <button class="chip" onclick="delKid('${k.id}')">Remove</button></span>
     </div>`).join("");
   app.innerHTML=`
-    <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button><h2>Parent area</h2></div>
+    <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button><h2>🔓 Parent area</h2></div>
     <div class="card">
       <h3>Players</h3>
       <div style="margin-top:8px">${list||'<p class="muted">No players yet.</p>'}</div>
     </div>
     <div class="card">
       <h3>About</h3>
-      <p class="muted" style="font-size:14px;line-height:1.5">All data is stored only on this device — nothing is sent anywhere. To use it on another tablet, set the players up there too. Add this page to the home screen for a full-screen, offline app.</p>
+      <p class="muted" style="font-size:14px;line-height:1.5">Data is stored only on this device. PINs are hidden by default — tap "Show PIN" to reveal one. Add this page to the home screen for a full-screen, offline app.</p>
     </div>`;
+}
+function togglePin(id,btn){
+  if(btn.textContent==="Show PIN"){ btn.textContent="PIN "+btn.dataset.pin; }
+  else { btn.textContent="Show PIN"; }
 }
 function delKid(id){
   if(!confirm("Remove this player and all their progress?")) return;
