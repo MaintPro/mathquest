@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Math Quest</title>
+<style>
+  :root{
+    --bg:#0e1b2c; --bg2:#12243b; --card:#16304d;
+    --line:#244563; --ink:#eaf2ff; --muted:#8fa6c4;
+    --gold:#ffc233; --gold2:#ffd970; --cyan:#36d1dc; --cyan2:#5be7f0;
+    --green:#3ddc97; --red:#ff6b6b; --purple:#a78bfa;
+    --r:18px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:'Trebuchet MS','Segoe UI',system-ui,-apple-system,sans-serif;
+    background:radial-gradient(1200px 800px at 70% -10%, #1c3a5e 0%, var(--bg) 55%), var(--bg);
+    color:var(--ink); overflow-x:hidden;
+    -webkit-user-select:none; user-select:none;
+  }
+  .wrap{max-width:680px;margin:0 auto;padding:18px 18px 40px;min-height:100%;}
+  h1,h2,h3{margin:0;font-weight:800;letter-spacing:.3px;}
+  .logo{font-size:34px;text-align:center;margin:8px 0 2px;
+    background:linear-gradient(90deg,var(--gold),var(--cyan2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  .logo small{display:block;font-size:13px;letter-spacing:3px;color:var(--muted);
+    -webkit-text-fill-color:var(--muted);font-weight:600;margin-top:2px;}
+  .card{background:linear-gradient(180deg,var(--card),var(--bg2));
+    border:1px solid var(--line);border-radius:var(--r);padding:18px;margin:14px 0;
+    box-shadow:0 10px 30px rgba(0,0,0,.35);}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  .btn{background:linear-gradient(180deg,var(--cyan2),var(--cyan));color:#05222a;
+    font-weight:800;font-size:18px;padding:16px;border-radius:14px;width:100%;
+    box-shadow:0 6px 0 #1c9aa6;transition:transform .05s, box-shadow .05s;}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #1c9aa6;}
+  .btn.gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#3a2a00;box-shadow:0 6px 0 #c9920a;}
+  .btn.gold:active{box-shadow:0 2px 0 #c9920a;}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);box-shadow:none;font-size:16px;}
+  .btn.ghost:active{transform:translateY(2px);}
+  .btn.sm{font-size:15px;padding:12px;}
+  .muted{color:var(--muted);}
+  .center{text-align:center;}
+  .hide{display:none!important;}
+
+  /* profile chips */
+  .kid{position:relative;background:linear-gradient(180deg,var(--card),var(--bg2));
+    border:2px solid var(--line);border-radius:20px;padding:20px 12px;text-align:center;
+    transition:transform .08s, border-color .15s;}
+  .kid:active{transform:scale(.97);}
+  .kid .avatar{font-size:46px;line-height:1;}
+  .kid .name{font-weight:800;margin-top:8px;font-size:18px;}
+  .kid .stars{color:var(--gold);font-weight:700;font-size:13px;margin-top:4px;}
+  .add{border-style:dashed;color:var(--muted);}
+
+  /* pin pad */
+  .pin-dots{display:flex;gap:14px;justify-content:center;margin:18px 0;}
+  .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--cyan);}
+  .dot.on{background:var(--cyan);}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:320px;margin:0 auto;}
+  .key{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    font-size:26px;font-weight:800;color:var(--ink);padding:18px;}
+  .key:active{background:var(--bg2);transform:scale(.95);}
+
+  /* quiz */
+  .qtop{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .pill{background:var(--bg2);border:1px solid var(--line);border-radius:999px;
+    padding:6px 14px;font-weight:700;font-size:14px;}
+  .pill.timer{color:var(--gold);}
+  .progress{height:10px;background:var(--bg2);border-radius:999px;overflow:hidden;margin:10px 0 4px;}
+  .progress > div{height:100%;background:linear-gradient(90deg,var(--cyan),var(--green));width:0;transition:width .3s;}
+  .question{font-size:54px;font-weight:800;text-align:center;margin:26px 0;letter-spacing:1px;}
+  .answer{font-size:40px;text-align:center;font-weight:800;background:var(--bg2);
+    border:2px solid var(--line);border-radius:16px;padding:14px;min-height:70px;
+    color:var(--gold2);letter-spacing:3px;}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;}
+  .opt{background:var(--card);border:2px solid var(--line);border-radius:16px;
+    font-size:26px;font-weight:800;color:var(--ink);padding:20px;}
+  .opt:active{transform:scale(.96);}
+  .opt.good{background:var(--green);color:#05291b;border-color:var(--green);}
+  .opt.bad{background:var(--red);color:#3a0000;border-color:var(--red);}
+  .feedback{text-align:center;font-size:22px;font-weight:800;min-height:30px;margin-top:14px;}
+  .feedback.good{color:var(--green);}
+  .feedback.bad{color:var(--red);}
+
+  /* results */
+  .big{font-size:60px;font-weight:800;text-align:center;
+    background:linear-gradient(90deg,var(--gold),var(--cyan2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  .statline{display:flex;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--line);}
+  .statline:last-child{border-bottom:none;}
+
+  /* range setup */
+  label.lbl{display:block;font-weight:700;margin:14px 0 6px;}
+  input[type=number]{width:90px;font-size:22px;font-weight:800;text-align:center;
+    background:var(--bg2);border:2px solid var(--line);border-radius:12px;color:var(--ink);padding:10px;}
+  .seg{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{background:var(--bg2);border:1px solid var(--line);border-radius:999px;
+    padding:10px 16px;font-weight:700;font-size:15px;color:var(--ink);}
+  .chip.on{background:var(--cyan);color:#05222a;border-color:var(--cyan);}
+
+  .topbar{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .back{background:var(--bg2);border:1px solid var(--line);border-radius:12px;
+    color:var(--ink);font-size:20px;font-weight:800;padding:8px 14px;}
+  .spacer{flex:1;}
+
+  /* mode menu */
+  .modecard{display:flex;align-items:center;gap:16px;text-align:left;background:linear-gradient(180deg,var(--card),var(--bg2));
+    border:1px solid var(--line);border-radius:18px;padding:18px;width:100%;color:var(--ink);margin-bottom:12px;}
+  .modecard:active{transform:scale(.98);}
+  .modecard .ico{font-size:36px;}
+  .modecard .t{font-weight:800;font-size:19px;}
+  .modecard .d{color:var(--muted);font-size:13px;margin-top:2px;}
+  .lock{margin-left:auto;color:var(--muted);font-size:13px;font-weight:700;}
+
+  .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);
+    background:var(--purple);color:#fff;font-weight:800;padding:14px 22px;border-radius:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:50;opacity:0;transition:opacity .3s;}
+  .toast.show{opacity:1;}
+
+  .bubble{position:absolute;bottom:-70px;width:64px;height:64px;border-radius:50%;
+    border:none;color:#05222a;font-size:22px;font-weight:800;
+    box-shadow:0 4px 12px rgba(0,0,0,.4), inset 0 -6px 10px rgba(0,0,0,.15);
+    animation:rise var(--dur,5s) linear forwards;}
+  .bubble:active{transform:scale(.9);}
+  @keyframes rise{ from{bottom:-70px;} to{bottom:110%;} }
+
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ Math Quest — offline, device-only storage ============ */
+const STORE_KEY = "mathquest_v1";
+const AVATARS = ["🦊","🐯","🐼","🦁","🐸","🐙","🦄","🐧","🐲","🦉","🐝","🐶"];
+// Sticker collection — each unlocks at a star milestone (every 25 stars)
+const STICKERS = ["🐢","🦋","🐬","🦜","🦩","🐳","🦦","🦥","🐉","🦚","🦈","🐅","🦓","🦒","🐘","🦌","🦢","🐊","🦅","🦉"];
+const STICKER_STEP = 25;
+function stickerGoalReached(k){
+  // how many stickers the kid has earned by total stars
+  return Math.min(STICKERS.length, Math.floor(k.stars / STICKER_STEP));
+}
+function checkStickers(k){
+  const earned = stickerGoalReached(k);
+  k.stickers = k.stickers || [];
+  const newOnes=[];
+  while(k.stickers.length < earned){
+    newOnes.push(STICKERS[k.stickers.length]);
+    k.stickers.push(STICKERS[k.stickers.length]);
+  }
+  return newOnes; // array of newly unlocked stickers (usually 0 or 1)
+}
+
+let _memFallback = false;
+let DB = load();
+function load(){
+  try{
+    const raw = window.localStorage.getItem(STORE_KEY);
+    return raw ? (JSON.parse(raw) || {kids:[]}) : {kids:[]};
+  }
+  catch(e){ _memFallback = true; return {kids:[]}; }
+}
+function save(){
+  try{ window.localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
+  catch(e){
+    // Safari Private Mode / blocked storage: keep working in memory this session
+    if(!_memFallback){ _memFallback = true; }
+  }
+}
+
+function newKid(name, avatar, pin){
+  return {
+    id: Date.now()+""+Math.floor(Math.random()*999),
+    name, avatar, pin,
+    range:{min:1,max:12},
+    speedSec:5,
+    stars:0,
+    stickers:[],
+    history:[],            // {date, mode, topic, score, total, timeSec}
+    facts:{}               // "a x b" -> {seen, wrong}
+  };
+}
+
+let session = {}; // active kid + quiz state
+const $ = id => document.getElementById(id);
+const app = $("app");
+
+function toast(msg){
+  const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),1600);
+}
+
+/* ---------------- SCREENS ---------------- */
+
+function screenProfiles(){
+  const kids = DB.kids.map(k=>`
+    <button class="kid" onclick="enterKid('${k.id}')">
+      <div class="avatar">${k.avatar}</div>
+      <div class="name">${esc(k.name)}</div>
+      <div class="stars">⭐ ${k.stars}</div>
+    </button>`).join("");
+  const addBtn = DB.kids.length<6 ? `
+    <button class="kid add" onclick="screenAddKid()">
+      <div class="avatar">＋</div><div class="name">Add player</div>
+      <div class="stars muted">up to 6</div>
+    </button>`:"";
+  app.innerHTML = `
+    <div class="logo">Math Quest<small>LEVEL UP YOUR MATHS</small></div>
+    <div class="card">
+      <h2 class="center" style="margin-bottom:4px">Who's playing?</h2>
+      <p class="center muted" style="margin:6px 0 16px;font-size:14px">Tap your name to start</p>
+      <div class="grid3">${kids}${addBtn}</div>
+    </div>
+    ${DB.kids.length?`<button class="btn ghost sm" onclick="screenManage()">Parent area</button>`:""}
+  `;
+}
+
+function screenAddKid(){
+  const avs = AVATARS.map((a,i)=>`<button class="chip av ${i===0?'on':''}" data-a="${a}" onclick="pickAv(this)">${a}</button>`).join("");
+  app.innerHTML = `
+    <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button><h2>New player</h2></div>
+    <div class="card">
+      <label class="lbl">Name</label>
+      <input id="kname" style="width:100%;font-size:20px;font-weight:800;background:var(--bg2);border:2px solid var(--line);border-radius:12px;color:var(--ink);padding:12px" placeholder="First name" maxlength="14">
+      <label class="lbl">Pick an animal</label>
+      <div class="seg" id="avrow">${avs}</div>
+      <label class="lbl">Choose a 4-digit PIN</label>
+      <p class="muted" style="margin:0 0 8px;font-size:13px">They'll type this to log in. Pick something they remember.</p>
+      <input id="kpin" type="tel" inputmode="numeric" maxlength="4" style="width:140px;font-size:26px;letter-spacing:8px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:12px;color:var(--gold2);padding:12px">
+      <div style="margin-top:18px"><button class="btn gold" onclick="saveNewKid()">Create player</button></div>
+    </div>`;
+  app._av = AVATARS[0];
+}
+function pickAv(el){
+  document.querySelectorAll('.av').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on'); app._av = el.dataset.a;
+}
+function saveNewKid(){
+  const name=$("kname").value.trim();
+  const pin=$("kpin").value.trim();
+  if(!name) return toast("Add a name");
+  if(!/^\d{4}$/.test(pin)) return toast("PIN must be 4 digits");
+  DB.kids.push(newKid(name, app._av, pin)); save();
+  toast("Player created!"); screenProfiles();
+}
+
+/* ---- PIN login ---- */
+function enterKid(id){
+  const k = DB.kids.find(x=>x.id===id);
+  session = {kid:k, entered:""};
+  drawPin();
+}
+function drawPin(){
+  const k=session.kid;
+  const dots=[0,1,2,3].map(i=>`<div class="dot ${i<session.entered.length?'on':''}"></div>`).join("");
+  const keys=[1,2,3,4,5,6,7,8,9,"x",0,"⌫"].map(n=>{
+    if(n==="x") return `<div></div>`;
+    return `<button class="key" onclick="pinPress('${n}')">${n}</button>`;
+  }).join("");
+  app.innerHTML = `
+    <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button><div class="spacer"></div></div>
+    <div class="card center">
+      <div style="font-size:52px">${k.avatar}</div>
+      <h2>${esc(k.name)}</h2>
+      <p class="muted" style="font-size:14px">Enter your PIN</p>
+      <div class="pin-dots">${dots}</div>
+      <div class="pad">${keys}</div>
+    </div>`;
+}
+function pinPress(n){
+  if(n==="⌫"){ session.entered=session.entered.slice(0,-1); return drawPin(); }
+  if(session.entered.length>=4) return;
+  session.entered+=n;
+  if(session.entered.length===4){
+    if(session.entered===session.kid.pin){ screenModes(); }
+    else { toast("Wrong PIN, try again"); session.entered=""; setTimeout(drawPin,150); }
+    return;
+  }
+  drawPin();
+}
+
+/* ---- Mode menu ---- */
+function screenModes(){
+  const k=session.kid;
+  app.innerHTML = `
+    <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button>
+      <h2>${k.avatar} ${esc(k.name)}</h2><div class="spacer"></div>
+      <span class="pill">⭐ ${k.stars}</span></div>
+
+    <button class="modecard" onclick="screenExplore()">
+      <span class="ico">🔍</span>
+      <span><span class="t">Explore tables</span>
+      <span class="d">See the patterns and tricks. The fun way to learn.</span></span></button>
+
+    <button class="modecard" onclick="startQuiz('practice')">
+      <span class="ico">✖️</span>
+      <span><span class="t">Times tables practice</span>
+      <span class="d">No timer. Learn at your pace (${k.range.min}–${k.range.max}).</span></span></button>
+
+    <button class="modecard" onclick="startPop()">
+      <span class="ico">🎈</span>
+      <span><span class="t">Pop the answer</span>
+      <span class="d">Tap the right bubble before it floats away!</span></span></button>
+
+    <button class="modecard" onclick="startQuiz('speed')">
+      <span class="ico">⚡</span>
+      <span><span class="t">Speed drill</span>
+      <span class="d">${k.speedSec||5}s per question. Beat the clock on every one!</span></span></button>
+
+    <button class="modecard" onclick="startQuiz('timed')">
+      <span class="ico">⏱️</span>
+      <span><span class="t">Beat the clock</span>
+      <span class="d">60 seconds total. How many can you get right?</span></span></button>
+
+    <button class="modecard" onclick="screenStickers()">
+      <span class="ico">🏆</span>
+      <span><span class="t">My stickers</span>
+      <span class="d">${(k.stickers||[]).length} of ${STICKERS.length} collected. Earn one every ${STICKER_STEP} stars!</span></span></button>
+
+    <button class="modecard" onclick="screenReport()">
+      <span class="ico">📈</span>
+      <span><span class="t">My progress</span>
+      <span class="d">See your stars, streaks and tricky tables.</span></span></button>
+
+    <button class="modecard" onclick="screenRange()">
+      <span class="ico">⚙️</span>
+      <span><span class="t">Settings</span>
+      <span class="d">Choose which times tables to practise.</span></span></button>
+
+    <button class="modecard" style="opacity:.55" onclick="toast('Fractions unlock soon!')">
+      <span class="ico">🍕</span>
+      <span><span class="t">Fractions</span><span class="d">Coming next.</span></span>
+      <span class="lock">🔒 soon</span></button>
+  `;
+}
+
+/* ---- Range / settings ---- */
+function screenRange(){
+  const k=session.kid;
+  const presets=[[1,10],[1,12],[1,20],[2,5]];
+  const chips=presets.map(p=>`<button class="chip ${k.range.min===p[0]&&k.range.max===p[1]?'on':''}" onclick="setRange(${p[0]},${p[1]})">${p[0]}–${p[1]}</button>`).join("");
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenModes()">‹</button><h2>Settings</h2></div>
+    <div class="card">
+      <label class="lbl">Quick picks</label>
+      <div class="seg">${chips}</div>
+      <label class="lbl">Or set your own range</label>
+      <div class="row" style="align-items:center">
+        <input type="number" id="rmin" min="1" max="20" value="${k.range.min}">
+        <span style="font-weight:800;font-size:20px">to</span>
+        <input type="number" id="rmax" min="1" max="20" value="${k.range.max}">
+      </div>
+      <p class="muted" style="font-size:13px;margin-top:10px">Questions will use these times tables, e.g. 7 × 8.</p>
+      <label class="lbl">Speed drill goal (seconds per question)</label>
+      <div class="seg">
+        ${[3,5,8,10].map(s=>`<button class="chip ${(k.speedSec||5)===s?'on':''}" onclick="setSpeed(${s})">${s}s</button>`).join("")}
+      </div>
+      <p class="muted" style="font-size:13px;margin-top:8px">Tip: start at 8–10s and lower it as they get faster. 3s is an expert goal.</p>
+      <div style="margin-top:16px"><button class="btn" onclick="saveRange()">Save</button></div>
+    </div>`;
+}
+function setRange(a,b){ session.kid.range={min:a,max:b}; save(); screenRange(); toast("Saved"); }
+function setSpeed(s){ session.kid.speedSec=s; save(); screenRange(); toast("Goal: "+s+"s"); }
+function saveRange(){
+  let a=parseInt($("rmin").value)||1, b=parseInt($("rmax").value)||12;
+  a=Math.max(1,Math.min(20,a)); b=Math.max(1,Math.min(20,b));
+  if(a>b)[a,b]=[b,a];
+  session.kid.range={min:a,max:b}; save(); toast("Saved"); screenModes();
+}
+
+/* ---- QUIZ ENGINE ---- */
+function genQ(k){
+  const {min,max}=k.range;
+  const rnd=()=>min+Math.floor(Math.random()*(max-min+1));
+  // bias toward facts the kid gets wrong
+  let a=rnd(), b=rnd();
+  // if a quiz is locked to one table (from Explore), force one factor
+  if(session.q && session.q.fixed){ a=session.q.fixed; b=1+Math.floor(Math.random()*12); }
+  const tricky=Object.entries(k.facts).filter(([_,f])=>f.wrong>0);
+  if(!(session.q&&session.q.fixed) && tricky.length && Math.random()<0.4){
+    const pick=tricky[Math.floor(Math.random()*tricky.length)][0].split("x");
+    a=+pick[0]; b=+pick[1];
+  }
+  const ans=a*b;
+  const opts=new Set([ans]);
+  while(opts.size<4){
+    let d=ans + (Math.floor(Math.random()*9)-4);
+    if(d<0) d=ans+Math.floor(Math.random()*5)+1;
+    if(d!==ans) opts.add(d);
+    if(opts.size<4 && Math.random()<.5) opts.add(a*(b+ (Math.random()<.5?1:-1)));
+  }
+  const choices=[...opts].slice(0,4).sort(()=>Math.random()-.5);
+  return {a,b,ans,choices,key:a+"x"+b};
+}
+
+function startQuiz(mode){
+  const k=session.kid;
+  session.q={mode, idx:0, correct:0, total: mode==='timed'?999:10,
+             answered:0, log:[], start:Date.now(), timeLeft:60,
+             speedSec:k.speedSec||5, beaten:0};
+  if(mode==='timed'){
+    session.q.timer=setInterval(()=>{
+      session.q.timeLeft--;
+      const el=$("timer"); if(el) el.textContent="⏱️ "+session.q.timeLeft+"s";
+      if(session.q.timeLeft<=0) endQuiz();
+    },1000);
+  }
+  nextQuestion();
+}
+function nextQuestion(){
+  const k=session.kid, q=session.q;
+  if((q.mode==='practice'||q.mode==='speed') && q.answered>=10) return endQuiz();
+  q.current=genQ(k);
+  q.qStart=Date.now();
+  drawQuiz();
+  if(q.mode==='speed'){
+    q.perLeft=q.speedSec;
+    if(q.perTimer) clearInterval(q.perTimer);
+    const ring=$("ring");
+    q.perTimer=setInterval(()=>{
+      q.perLeft--;
+      const el=$("timer"); if(el) el.textContent="⚡ "+q.perLeft+"s";
+      if(q.perLeft<=0){ clearInterval(q.perTimer); timeOut(); }
+    },1000);
+  }
+}
+function timeOut(){
+  const q=session.q, c=q.current;
+  if(q.locked) return; q.locked=true;
+  document.querySelectorAll('.opt').forEach(b=>{ b.disabled=true; if(+b.textContent===c.ans) b.classList.add("good"); });
+  const k=session.kid;
+  const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++; f.wrong++;
+  const fb=$("fb"); fb.textContent="Too slow! "+c.a+" × "+c.b+" = "+c.ans; fb.className="feedback bad";
+  q.answered++; save();
+  setTimeout(()=>{ q.locked=false; nextQuestion(); },1300);
+}
+function drawQuiz(){
+  const k=session.kid, q=session.q, c=q.current;
+  const prog = (q.mode==='timed') ? Math.min(100,(q.answered/10)*100) : (q.answered/10)*100;
+  let counter;
+  if(q.mode==='timed') counter=`<span class="pill timer" id="timer">⏱️ ${q.timeLeft}s</span>`;
+  else if(q.mode==='speed') counter=`<span class="pill timer" id="timer">⚡ ${q.speedSec}s</span>`;
+  else counter=`<span class="pill">${q.answered+1} / 10</span>`;
+  app.innerHTML=`
+    <div class="qtop">
+      <button class="back" onclick="quitQuiz()">✕</button>
+      <span class="pill">✅ ${q.correct}</span>
+      ${counter}
+    </div>
+    <div class="progress"><div style="width:${prog}%"></div></div>
+    <div class="question">${c.a} × ${c.b}</div>
+    <div class="opts">
+      ${c.choices.map(n=>`<button class="opt" onclick="answer(this,${n})">${n}</button>`).join("")}
+    </div>
+    <div class="feedback" id="fb"></div>`;
+}
+function answer(el, val){
+  const k=session.kid, q=session.q, c=q.current;
+  if(q.locked) return; q.locked=true;
+  if(q.perTimer) clearInterval(q.perTimer);
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+  const fb=$("fb");
+  const f = k.facts[c.key] || (k.facts[c.key]={seen:0,wrong:0});
+  f.seen++;
+  const elapsed=(Date.now()-q.qStart)/1000;
+  if(val===c.ans){
+    el.classList.add("good");
+    if(q.mode==='speed' && elapsed<=q.speedSec){ q.beaten++; fb.textContent="⚡ "+elapsed.toFixed(1)+"s — beat it!"; }
+    else fb.textContent=pick(["Nice!","Correct!","Boom!","Spot on!","Yes!"]);
+    fb.className="feedback good";
+    q.correct++; k.stars++;
+  } else {
+    el.classList.add("bad"); f.wrong++;
+    document.querySelectorAll('.opt').forEach(b=>{ if(+b.textContent===c.ans) b.classList.add("good"); });
+    fb.textContent=`${c.a} × ${c.b} = ${c.ans}`; fb.className="feedback bad";
+  }
+  q.answered++;
+  save();
+  setTimeout(()=>{ q.locked=false; nextQuestion(); }, val===c.ans?650:1300);
+}
+function quitQuiz(){ const q=session.q; if(q){ if(q.timer)clearInterval(q.timer); if(q.perTimer)clearInterval(q.perTimer);} screenModes(); }
+
+function endQuiz(){
+  const k=session.kid, q=session.q;
+  if(q.timer) clearInterval(q.timer);
+  if(q.perTimer) clearInterval(q.perTimer);
+  const timeSec=Math.round((Date.now()-q.start)/1000);
+  k.history.push({date:Date.now(), mode:q.mode, topic:"Times tables",
+    score:q.correct, total:q.answered, timeSec, beaten:q.beaten||0, goal:q.mode==='speed'?q.speedSec:null});
+  if(k.history.length>200) k.history=k.history.slice(-200);
+  const unlocked=checkStickers(k);
+  save();
+  const pct = q.answered? Math.round(q.correct/q.answered*100):0;
+  const msg = pct>=90?"Brilliant! 🏆": pct>=70?"Great work! 🌟": pct>=50?"Good effort! 💪":"Keep practising! 🚀";
+  const unlockBanner = unlocked.length
+    ? `<div class="card" style="background:linear-gradient(180deg,#3b2a5e,#23163d);border-color:var(--purple);margin-bottom:0">
+         <h3 class="center">🎉 New sticker unlocked!</h3>
+         <div class="center" style="font-size:64px;margin:6px 0">${unlocked.join(" ")}</div>
+         <p class="center muted" style="font-size:13px">Added to your collection</p></div>`
+    : '';
+  app.innerHTML=`
+    ${unlockBanner}
+    <div class="card center">
+      <h2>${msg}</h2>
+      <div class="big">${q.correct}/${q.answered}</div>
+      <p class="muted">${pct}% correct</p>
+      <div style="margin:14px 0">
+        <div class="statline"><span>⭐ Stars earned</span><b>+${q.correct}</b></div>
+        ${q.mode==='speed'?`<div class="statline"><span>⚡ Beat ${q.speedSec}s goal</span><b>${q.beaten}/${q.answered}</b></div>`:''}
+        <div class="statline"><span>⏱️ Time</span><b>${timeSec}s</b></div>
+        <div class="statline"><span>🏅 Total stars</span><b>${k.stars}</b></div>
+      </div>
+      <button class="btn gold" onclick="startQuiz('${q.mode}')">Play again</button>
+      <div style="height:10px"></div>
+      <button class="btn ghost" onclick="screenModes()">Back to menu</button>
+    </div>`;
+}
+
+/* ---- Progress report ---- */
+function screenReport(){
+  const k=session.kid;
+  const h=k.history;
+  const games=h.length;
+  const totQ=h.reduce((s,x)=>s+x.total,0);
+  const totC=h.reduce((s,x)=>s+x.score,0);
+  const acc=totQ?Math.round(totC/totQ*100):0;
+  const tricky=Object.entries(k.facts).filter(([_,f])=>f.wrong>0)
+    .sort((a,b)=>b[1].wrong-a[1].wrong).slice(0,6)
+    .map(([key,f])=>{const[a,b]=key.split("x");return `<span class="chip">${a}×${b} <span class="muted">(${f.wrong}✗)</span></span>`;}).join("") || `<span class="muted">None yet — great job!</span>`;
+  const recent=h.slice(-8).reverse().map(x=>{
+    const d=new Date(x.date); const dd=d.getDate()+"/"+(d.getMonth()+1);
+    return `<div class="statline"><span>${dd} · ${x.mode==='timed'?'⏱️ Timed':x.mode==='speed'?'⚡ Speed '+(x.goal||'')+'s':x.mode==='pop'?'🎈 Pop':'✖️ Practice'}</span><b>${x.score}/${x.total}</b></div>`;
+  }).join("") || `<p class="muted center">No games yet.</p>`;
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenModes()">‹</button><h2>My progress</h2></div>
+    <div class="card">
+      <div class="grid3 center">
+        <div><div class="big" style="font-size:34px">${k.stars}</div><div class="muted">stars</div></div>
+        <div><div class="big" style="font-size:34px">${games}</div><div class="muted">games</div></div>
+        <div><div class="big" style="font-size:34px">${acc}%</div><div class="muted">accuracy</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Tables to practise</h3>
+      <div class="seg" style="margin-top:10px">${tricky}</div>
+    </div>
+    <div class="card">
+      <h3>Recent games</h3>
+      <div style="margin-top:6px">${recent}</div>
+    </div>`;
+}
+
+/* ---- Sticker collection ---- */
+function screenStickers(){
+  const k=session.kid;
+  const have=k.stickers||[];
+  const toNext = STICKER_STEP - (k.stars % STICKER_STEP);
+  const cells=STICKERS.map((s,i)=>{
+    const got=i<have.length;
+    return `<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+      font-size:34px;border-radius:16px;border:2px solid var(--line);
+      background:${got?'linear-gradient(180deg,#2a1f4d,#1c1535)':'var(--bg2)'};
+      ${got?'':'filter:grayscale(1);opacity:.35'}">${got?s:'❓'}</div>`;
+  }).join("");
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenModes()">‹</button><h2>My stickers</h2></div>
+    <div class="card center">
+      <div class="big" style="font-size:34px">${have.length} / ${STICKERS.length}</div>
+      <p class="muted">${have.length<STICKERS.length?`${toNext} more stars to your next sticker ⭐`:'Full collection — amazing! 🏆'}</p>
+    </div>
+    <div class="card">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">${cells}</div>
+    </div>`;
+}
+
+/* ---- Explore mode: visual patterns + tricks ---- */
+function screenExplore(table){
+  const k=session.kid;
+  if(!table){
+    // table picker 1..12
+    const chips=[];
+    for(let t=1;t<=12;t++) chips.push(`<button class="opt" style="padding:14px;font-size:22px" onclick="screenExplore(${t})">${t}×</button>`);
+    app.innerHTML=`
+      <div class="topbar"><button class="back" onclick="screenModes()">‹</button><h2>Explore tables</h2></div>
+      <div class="card">
+        <p class="muted center" style="margin-top:0">Pick a times table to see its pattern.</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">${chips}</div>
+      </div>`;
+    return;
+  }
+  const t=table;
+  // skip-count strip
+  const strip=[];
+  for(let i=1;i<=12;i++) strip.push(`<span class="chip" style="font-size:16px">${t*i}</span>`);
+  // facts list, tap to reveal
+  let facts='';
+  for(let i=1;i<=12;i++){
+    facts+=`<button class="statline" style="width:100%;background:none;border:none;border-bottom:1px solid var(--line);color:var(--ink)" onclick="this.querySelector('.rv').textContent='= ${t*i}';this.querySelector('.rv').style.color='var(--gold2)'">
+      <span>${t} × ${i}</span><b class="rv" style="color:var(--muted)">tap</b></button>`;
+  }
+  // hundred grid highlighting multiples
+  let grid='';
+  for(let n=1;n<=100;n++){
+    const hit=(n%t===0);
+    grid+=`<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:11px;border-radius:5px;
+      background:${hit?'var(--cyan)':'var(--bg2)'};color:${hit?'#05222a':'var(--muted)'};font-weight:${hit?'800':'400'}">${n}</div>`;
+  }
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenExplore()">‹</button><h2>${t} times table</h2></div>
+    <div class="card">
+      <h3>Count in ${t}s</h3>
+      <div class="seg" style="margin-top:10px">${strip}</div>
+    </div>
+    <div class="card">
+      <h3>Tap to reveal</h3>
+      <div style="margin-top:6px">${facts}</div>
+    </div>
+    <div class="card">
+      <h3>${trickFor(t)?'✨ Trick':'Pattern'}</h3>
+      <p style="font-size:15px;line-height:1.55;margin:8px 0 0">${trickFor(t)||'Every answer is '+t+' bigger than the one before. Watch where they land on the grid below.'}</p>
+    </div>
+    <div class="card">
+      <h3>Where the ${t}s land</h3>
+      <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:10px">${grid}</div>
+    </div>
+    <button class="btn gold" onclick="(session.q={mode:'practice',correct:0,total:10,answered:0,start:Date.now(),beaten:0,fixed:${t}},nextQuestion())">Quiz me on ${t}s</button>`;
+}
+function trickFor(t){
+  const m={
+    2:"Doubling! Just add the number to itself. 2×7 = 7+7 = 14.",
+    4:"Double, then double again. 4×6 → double 6 is 12, double again is 24.",
+    5:"Every answer ends in 5 or 0. They go 5,10,15,20… like the clock!",
+    8:"Double three times. 8×3 → 6 → 12 → 24.",
+    9:"Finger trick: hold up 10 fingers. For 9×4, fold your 4th finger. Fingers before it = 3 (tens), fingers after = 6 (ones) → 36. Also the digits always add to 9!",
+    10:"Easiest of all — just add a zero. 10×7 = 70.",
+    11:"For 11× single digits, just double the digit: 11×3 = 33, 11×7 = 77.",
+    1:"Anything times 1 stays the same. 1×8 = 8."
+  };
+  return m[t]||null;
+}
+
+/* ---- Pop the answer (arcade) ---- */
+function startPop(){
+  const k=session.kid;
+  session.pop={score:0, answered:0, total:10, start:Date.now()};
+  popNext();
+}
+function popNext(){
+  const k=session.kid, p=session.pop;
+  if(p.answered>=p.total) return popEnd();
+  const c=genQ(k); p.current=c;
+  // build bubbles from the 4 choices
+  const bubbles=c.choices.map((n,i)=>{
+    const left=8+i*23+(Math.random()*6-3);
+    const dur=(4.2+Math.random()*1.6).toFixed(2);
+    const delay=(i*0.5).toFixed(2);
+    const col=['#36d1dc','#a78bfa','#3ddc97','#ffc233'][i];
+    return `<button class="bubble" style="left:${left}%;--dur:${dur}s;animation-delay:${delay}s;background:${col}"
+      onclick="popHit(${n})">${n}</button>`;
+  }).join("");
+  app.innerHTML=`
+    <div class="qtop">
+      <button class="back" onclick="screenModes()">✕</button>
+      <span class="pill">✅ ${p.score}</span>
+      <span class="pill">${p.answered+1} / ${p.total}</span>
+    </div>
+    <div class="question" style="margin:14px 0">${c.a} × ${c.b}</div>
+    <div id="poparea" style="position:relative;height:46vh;overflow:hidden;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#0b1a2c,#10243c)">
+      ${bubbles}
+    </div>
+    <div class="feedback" id="fb"></div>`;
+  // if all bubbles float off screen, count as miss
+  p.timeout=setTimeout(()=>popHit(null,true), 6200);
+}
+function popHit(val, missed){
+  const k=session.kid, p=session.pop, c=p.current;
+  if(p.locked) return; p.locked=true;
+  clearTimeout(p.timeout);
+  document.querySelectorAll('.bubble').forEach(b=>{b.style.animationPlayState='paused'; b.disabled=true;});
+  const fb=$("fb");
+  const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
+  if(val===c.ans){ p.score++; k.stars++; fb.textContent=pick(["Pop! 🎉","Got it!","Nice shot!","Boom!"]); fb.className="feedback good"; }
+  else { f.wrong++; fb.textContent=`${c.a} × ${c.b} = ${c.ans}`; fb.className="feedback bad"; }
+  p.answered++;
+  const unlocked=checkStickers(k); save();
+  if(unlocked.length) toast("🎉 New sticker: "+unlocked.join(" "));
+  setTimeout(()=>{ p.locked=false; popNext(); }, val===c.ans?700:1300);
+}
+function popEnd(){
+  const k=session.kid, p=session.pop;
+  k.history.push({date:Date.now(), mode:'pop', topic:"Times tables", score:p.score, total:p.answered, timeSec:Math.round((Date.now()-p.start)/1000)});
+  if(k.history.length>200) k.history=k.history.slice(-200);
+  const unlocked=checkStickers(k); save();
+  app.innerHTML=`
+    ${unlocked.length?`<div class="card center" style="border-color:var(--purple)"><h3>🎉 New sticker!</h3><div style="font-size:56px">${unlocked.join(" ")}</div></div>`:''}
+    <div class="card center">
+      <h2>${p.score>=8?'Sharp shooter! 🎯':p.score>=5?'Nice popping! 🎈':'Keep going! 💪'}</h2>
+      <div class="big">${p.score}/${p.answered}</div>
+      <div style="margin:14px 0"><div class="statline"><span>⭐ Stars earned</span><b>+${p.score}</b></div>
+      <div class="statline"><span>🏅 Total stars</span><b>${k.stars}</b></div></div>
+      <button class="btn gold" onclick="startPop()">Play again</button>
+      <div style="height:10px"></div>
+      <button class="btn ghost" onclick="screenModes()">Back to menu</button>
+    </div>`;
+}
+
+/* ---- Parent area ---- */
+function screenManage(){
+  const list=DB.kids.map(k=>`
+    <div class="statline">
+      <span>${k.avatar} ${esc(k.name)} <span class="muted">· PIN ${k.pin} · ⭐${k.stars}</span></span>
+      <button class="chip" onclick="delKid('${k.id}')">Remove</button>
+    </div>`).join("");
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button><h2>Parent area</h2></div>
+    <div class="card">
+      <h3>Players</h3>
+      <div style="margin-top:8px">${list||'<p class="muted">No players yet.</p>'}</div>
+    </div>
+    <div class="card">
+      <h3>About</h3>
+      <p class="muted" style="font-size:14px;line-height:1.5">All data is stored only on this device — nothing is sent anywhere. To use it on another tablet, set the players up there too. Add this page to the home screen for a full-screen, offline app.</p>
+    </div>`;
+}
+function delKid(id){
+  if(!confirm("Remove this player and all their progress?")) return;
+  DB.kids=DB.kids.filter(k=>k.id!==id); save(); screenManage();
+}
+
+/* utils */
+function esc(s){return (s+"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function pick(a){return a[Math.floor(Math.random()*a.length)];}
+
+try {
+  screenProfiles();
+} catch(err) {
+  document.getElementById('app').innerHTML =
+    '<div style="padding:24px;color:#eaf2ff;font-family:sans-serif">'+
+    '<h2>Something went wrong loading the app</h2>'+
+    '<p style="color:#8fa6c4">Please try reopening it in Safari or Chrome (not inside a messaging app).</p>'+
+    '<pre style="white-space:pre-wrap;color:#ff6b6b;font-size:12px">'+(err && err.message ? err.message : err)+'</pre></div>';
+}
+</script>
+</body>
+</html>
