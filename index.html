@@ -186,10 +186,23 @@ function newKid(name, avatar, pin){
     speedSec:5,
     stars:0,
     stickers:[],
-    history:[],            // {date, mode, topic, score, total, timeSec}
-    facts:{}               // "a x b" -> {seen, wrong}
+    levelsUnlocked:["tables"],   // which path levels are open
+    lastWarmup:null,             // date string of last completed warm-up
+    history:[],                  // {date, mode, topic, score, total, timeSec}
+    facts:{}                     // "aOPb" -> {seen, wrong}  (OP is x or ÷)
   };
 }
+
+/* ---- Learning path ---- */
+const PATH = [
+  {id:"tables",   name:"Times Tables", icon:"✖️", op:"x", desc:"Multiplication facts"},
+  {id:"division", name:"Division",     icon:"➗", op:"÷", desc:"Sharing and grouping"},
+  {id:"fractions",name:"Fractions",    icon:"🍕", op:"f", desc:"Parts of a whole", soon:true}
+];
+function levelById(id){ return PATH.find(l=>l.id===id); }
+function nextLevel(id){ const i=PATH.findIndex(l=>l.id===id); return PATH[i+1]||null; }
+function isUnlocked(k,id){ return (k.levelsUnlocked||["tables"]).includes(id); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); }
 
 let session = {}; // active kid + quiz state
 const $ = id => document.getElementById(id);
@@ -282,66 +295,277 @@ function pinPress(n){
   if(session.entered.length>=4) return;
   session.entered+=n;
   if(session.entered.length===4){
-    if(session.entered===session.kid.pin){ screenModes(); }
+    if(session.entered===session.kid.pin){ afterLogin(); }
     else { toast("Wrong PIN, try again"); session.entered=""; setTimeout(drawPin,150); }
     return;
   }
   drawPin();
 }
 
-/* ---- Mode menu ---- */
-function screenModes(){
+/* ---- After login: daily warm-up gate, then path home ---- */
+function afterLogin(){
   const k=session.kid;
-  app.innerHTML = `
+  // warm-up due if they have history and haven't warmed up today
+  const hasLearned = (k.history||[]).length>0;
+  if(hasLearned && k.lastWarmup!==todayStr()){
+    return screenWarmupIntro();
+  }
+  screenPath();
+}
+
+/* ---- Learning path home ---- */
+function screenPath(){
+  const k=session.kid;
+  const cards = PATH.map(lv=>{
+    const unlocked = isUnlocked(k,lv.id);
+    const soon = lv.soon && !unlocked;
+    const done = nextLevel(lv.id) && isUnlocked(k, (nextLevel(lv.id)||{}).id); // passed if next is open
+    const status = soon ? `<span class="lock">🔒 soon</span>`
+      : !unlocked ? `<span class="lock">🔒 locked</span>`
+      : done ? `<span class="lock" style="color:var(--green)">✓ mastered</span>`
+      : `<span class="lock" style="color:var(--cyan2)">open</span>`;
+    const click = (unlocked && !lv.soon) ? `onclick="openLevel('${lv.id}')"` : `onclick="toast('${soon?'Coming soon!':'Master the level before this one first 🔒'}')"`;
+    return `<button class="modecard" ${click} style="${unlocked&&!lv.soon?'':'opacity:.55'}">
+      <span class="ico">${lv.icon}</span>
+      <span><span class="t">${lv.name}</span><span class="d">${lv.desc}</span></span>
+      ${status}</button>`;
+  }).join("");
+  app.innerHTML=`
     <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button>
       <h2>${k.avatar} ${esc(k.name)}</h2><div class="spacer"></div>
       <span class="pill">⭐ ${k.stars}</span></div>
+    <div class="card" style="padding:14px 18px">
+      <h3 style="margin-bottom:2px">Your learning path</h3>
+      <p class="muted" style="font-size:13px;margin:4px 0 0">Master each level to unlock the next.</p>
+    </div>
+    ${cards}
+    <button class="modecard" onclick="screenStickers()">
+      <span class="ico">🏆</span><span><span class="t">My stickers</span>
+      <span class="d">${(k.stickers||[]).length} of ${STICKERS.length} collected.</span></span></button>
+    <button class="modecard" onclick="screenReport()">
+      <span class="ico">📈</span><span><span class="t">My progress</span>
+      <span class="d">Stars, streaks and tricky facts.</span></span></button>
+    <button class="modecard" onclick="screenRange()">
+      <span class="ico">⚙️</span><span><span class="t">Settings</span>
+      <span class="d">Number range and speed goal.</span></span></button>
+  `;
+}
+
+/* back-compat: route to active level menu, else path home */
+function screenModes(){ if(session.level) screenLevel(); else screenPath(); }
+
+/* ---- Level menu (per level) ---- */
+function openLevel(id){
+  session.level = levelById(id);
+  screenLevel();
+}
+function screenLevel(){
+  const k=session.kid, lv=session.level, op=lv.op;
+  const canAdvance = !!nextLevel(lv.id) && !nextLevel(lv.id).soon;
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenPath()">‹</button>
+      <h2>${lv.icon} ${lv.name}</h2><div class="spacer"></div>
+      <span class="pill">⭐ ${k.stars}</span></div>
 
     <button class="modecard" onclick="screenExplore()">
-      <span class="ico">🔍</span>
-      <span><span class="t">Explore tables</span>
-      <span class="d">See the patterns and tricks. The fun way to learn.</span></span></button>
+      <span class="ico">🔍</span><span><span class="t">Explore</span>
+      <span class="d">See how it works — the fun way to learn.</span></span></button>
 
     <button class="modecard" onclick="startQuiz('practice')">
-      <span class="ico">✖️</span>
-      <span><span class="t">Times tables practice</span>
-      <span class="d">No timer. Learn at your pace (${k.range.min}–${k.range.max}).</span></span></button>
+      <span class="ico">${lv.icon}</span><span><span class="t">Practice</span>
+      <span class="d">No timer. 10 questions at your pace.</span></span></button>
 
     <button class="modecard" onclick="startPop()">
-      <span class="ico">🎈</span>
-      <span><span class="t">Pop the answer</span>
+      <span class="ico">🎈</span><span><span class="t">Pop the answer</span>
       <span class="d">Tap the right bubble before it floats away!</span></span></button>
 
     <button class="modecard" onclick="startQuiz('speed')">
-      <span class="ico">⚡</span>
-      <span><span class="t">Speed drill</span>
-      <span class="d">${k.speedSec||5}s per question. Beat the clock on every one!</span></span></button>
+      <span class="ico">⚡</span><span><span class="t">Speed drill</span>
+      <span class="d">${k.speedSec||5}s per question.</span></span></button>
 
-    <button class="modecard" onclick="startQuiz('timed')">
-      <span class="ico">⏱️</span>
-      <span><span class="t">Beat the clock</span>
-      <span class="d">60 seconds total. How many can you get right?</span></span></button>
-
-    <button class="modecard" onclick="screenStickers()">
-      <span class="ico">🏆</span>
-      <span><span class="t">My stickers</span>
-      <span class="d">${(k.stickers||[]).length} of ${STICKERS.length} collected. Earn one every ${STICKER_STEP} stars!</span></span></button>
-
-    <button class="modecard" onclick="screenReport()">
-      <span class="ico">📈</span>
-      <span><span class="t">My progress</span>
-      <span class="d">See your stars, streaks and tricky tables.</span></span></button>
-
-    <button class="modecard" onclick="screenRange()">
-      <span class="ico">⚙️</span>
-      <span><span class="t">Settings</span>
-      <span class="d">Choose which times tables to practise.</span></span></button>
-
-    <button class="modecard" style="opacity:.55" onclick="toast('Fractions unlock soon!')">
-      <span class="ico">🍕</span>
-      <span><span class="t">Fractions</span><span class="d">Coming next.</span></span>
-      <span class="lock">🔒 soon</span></button>
+    <button class="modecard" onclick="startMastery()" style="border-color:var(--gold)">
+      <span class="ico">🎓</span><span><span class="t">Mastery check</span>
+      <span class="d">${canAdvance?`Get 10/10 to unlock ${nextLevel(lv.id).name}!`:'Prove you have got it: 10/10.'}</span></span></button>
   `;
+}
+
+/* ---- Daily warm-up ---- */
+function screenWarmupIntro(){
+  const k=session.kid;
+  app.innerHTML=`
+    <div class="card center">
+      <div style="font-size:52px">☀️</div>
+      <h2>Daily warm-up</h2>
+      <p class="muted">A quick 5-question check of what you've been learning. Then you're ready for today!</p>
+      <button class="btn gold" onclick="startWarmup()">Start warm-up</button>
+      <div style="height:10px"></div>
+      <button class="btn ghost" onclick="screenPath()">Skip for now</button>
+    </div>`;
+}
+function startWarmup(){
+  const k=session.kid;
+  // pull recent facts the kid has seen, prefer ones missed
+  const seen=Object.keys(k.facts);
+  session.warm={idx:0, correct:0, total:5, qs:buildWarmQs(k), locked:false};
+  warmNext();
+}
+function buildWarmQs(k){
+  // Generate 5 questions from unlocked levels, weighting tricky facts
+  const ops = (k.levelsUnlocked||["tables"]).map(id=>levelById(id)).filter(l=>l&&!l.soon);
+  const qs=[];
+  for(let i=0;i<5;i++){
+    const lv=ops[Math.floor(Math.random()*ops.length)]||PATH[0];
+    session.q={op:lv.op}; // temp context for genQ
+    qs.push({...genQ(k), levelName:lv.name});
+  }
+  session.q=null;
+  return qs;
+}
+function warmNext(){
+  const w=session.warm;
+  if(w.idx>=w.total) return warmEnd();
+  w.current=w.qs[w.idx];
+  const c=w.current;
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="screenPath()">✕</button>
+      <span class="pill">☀️ Warm-up</span><span class="pill">${w.idx+1} / ${w.total}</span></div>
+    <div class="progress"><div style="width:${(w.idx/w.total)*100}%"></div></div>
+    <div class="question">${c.prompt}</div>
+    <div class="opts">${c.choices.map(n=>`<button class="opt" onclick="warmAns(this,${n})">${n}</button>`).join("")}</div>
+    <div class="feedback" id="fb"></div>`;
+}
+function warmAns(el,val){
+  const k=session.kid, w=session.warm, c=w.current;
+  if(w.locked) return; w.locked=true;
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+  const fb=$("fb");
+  if(val===c.ans){ el.classList.add("good"); fb.textContent="Yes!"; fb.className="feedback good"; w.correct++; k.stars++; }
+  else { el.classList.add("bad"); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
+  w.idx++;
+  setTimeout(()=>{ w.locked=false; warmNext(); }, val===c.ans?600:1200);
+}
+function warmEnd(){
+  const k=session.kid, w=session.warm;
+  k.lastWarmup=todayStr();
+  checkStickers(k); save();
+  // auto-suggest the next best thing
+  const suggestion = suggestNext(k);
+  app.innerHTML=`
+    <div class="card center">
+      <div style="font-size:48px">${w.correct>=4?'🌟':'💪'}</div>
+      <h2>Warm-up done!</h2>
+      <div class="big">${w.correct}/${w.total}</div>
+      <p class="muted">${w.correct>=4?'Sharp as ever — ready for today.':'Good shake-out. A little practice will help.'}</p>
+    </div>
+    <div class="card">
+      <h3>Suggested for today</h3>
+      <p class="muted" style="font-size:14px;margin:6px 0 12px">${suggestion.why}</p>
+      <button class="btn gold" onclick="${suggestion.action}">${suggestion.label}</button>
+    </div>
+    <button class="btn ghost" onclick="screenPath()">Choose myself</button>`;
+}
+function suggestNext(k){
+  // open the highest unlocked, not-yet-mastered level; if warm-up shaky, suggest practice
+  const unlocked=(k.levelsUnlocked||["tables"]).map(levelById).filter(l=>l&&!l.soon);
+  const current=unlocked[unlocked.length-1];
+  const canAdvance = nextLevel(current.id) && !nextLevel(current.id).soon;
+  if(session.warm && session.warm.correct<4){
+    return {label:`Practise ${current.name}`, why:`Let's warm those ${current.name.toLowerCase()} up with some practice.`, action:`openLevel('${current.id}');setTimeout(()=>startQuiz('practice'),50)`};
+  }
+  if(canAdvance){
+    return {label:`Try the ${current.name} mastery check`, why:`You're flying! Pass 10/10 to unlock ${nextLevel(current.id).name}.`, action:`openLevel('${current.id}');setTimeout(startMastery,50)`};
+  }
+  return {label:`Practise ${current.name}`, why:`Keep ${current.name} sharp.`, action:`openLevel('${current.id}');setTimeout(()=>startQuiz('practice'),50)`};
+}
+
+/* ---- Mastery check: 10/10, 3 attempts, retry only missed ---- */
+function startMastery(){
+  const k=session.kid, lv=session.level;
+  session.mastery={lv, attempt:1, maxAttempts:3, queue:null, missed:[], correct:0, total:10};
+  masteryBuild(true);
+}
+function masteryBuild(fresh){
+  const k=session.kid, m=session.mastery;
+  if(fresh){
+    m.queue=[];
+    for(let i=0;i<10;i++){ session.q={op:m.lv.op}; m.queue.push(genQ(k)); }
+    session.q=null;
+  } else {
+    m.queue=m.missed.slice(); // retry only missed
+  }
+  m.idx=0; m.correct=0; m.total=m.queue.length; m.missed=[]; m.locked=false;
+  masteryNext();
+}
+function masteryNext(){
+  const m=session.mastery;
+  if(m.idx>=m.queue.length) return masteryEnd();
+  m.current=m.queue[m.idx];
+  const c=m.current;
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="screenLevel()">✕</button>
+      <span class="pill" style="color:var(--gold)">🎓 Attempt ${m.attempt}/${m.maxAttempts}</span>
+      <span class="pill">${m.idx+1} / ${m.queue.length}</span></div>
+    <div class="progress"><div style="width:${(m.idx/m.queue.length)*100}%"></div></div>
+    <div class="question">${c.prompt}</div>
+    <div class="opts">${c.choices.map(n=>`<button class="opt" onclick="masteryAns(this,${n})">${n}</button>`).join("")}</div>
+    <div class="feedback" id="fb"></div>`;
+}
+function masteryAns(el,val){
+  const k=session.kid, m=session.mastery, c=m.current;
+  if(m.locked) return; m.locked=true;
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+  const fb=$("fb");
+  const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
+  if(val===c.ans){ el.classList.add("good"); fb.textContent="Correct!"; fb.className="feedback good"; m.correct++; k.stars++; }
+  else { el.classList.add("bad"); f.wrong++; m.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
+  m.idx++; save();
+  setTimeout(()=>{ m.locked=false; masteryNext(); }, val===c.ans?600:1200);
+}
+function masteryEnd(){
+  const k=session.kid, m=session.mastery, lv=m.lv;
+  const passed = m.missed.length===0;
+  k.history.push({date:Date.now(), mode:'mastery', topic:lv.name, score:m.correct, total:m.total, timeSec:0});
+  if(k.history.length>200) k.history=k.history.slice(-200);
+
+  if(passed){
+    const nxt=nextLevel(lv.id);
+    let unlockedMsg="";
+    if(nxt && !nxt.soon && !isUnlocked(k,nxt.id)){
+      k.levelsUnlocked.push(nxt.id);
+      unlockedMsg=`<div class="card center" style="border-color:var(--green)">
+        <div style="font-size:48px">${nxt.icon}</div>
+        <h3>${nxt.name} unlocked! 🎉</h3>
+        <p class="muted">A whole new level to explore.</p></div>`;
+    }
+    const unlocked=checkStickers(k); save();
+    app.innerHTML=`
+      ${unlockedMsg}
+      <div class="card center">
+        <div style="font-size:48px">🎓</div>
+        <h2>Mastered ${lv.name}!</h2>
+        <div class="big">10/10</div>
+        <p class="muted">Perfect score. Brilliant work.</p>
+        <button class="btn gold" onclick="screenPath()">Back to my path</button>
+      </div>`;
+    return;
+  }
+
+  // not passed
+  save();
+  const canRetry = m.attempt < m.maxAttempts;
+  app.innerHTML=`
+    <div class="card center">
+      <div style="font-size:48px">${canRetry?'🔁':'💪'}</div>
+      <h2>${m.correct}/${m.total}</h2>
+      <p class="muted">${canRetry
+        ? `So close! Let's redo just the ${m.missed.length} you missed.`
+        : `Good effort! Practise a little and try again any time.`}</p>
+      ${canRetry
+        ? `<button class="btn gold" onclick="session.mastery.attempt++;masteryBuild(false)">Retry the missed ones</button>`
+        : `<button class="btn gold" onclick="openLevel('${lv.id}');setTimeout(()=>startQuiz('practice'),50)">Practise first</button>`}
+      <div style="height:10px"></div>
+      <button class="btn ghost" onclick="screenLevel()">Back</button>
+    </div>`;
 }
 
 /* ---- Range / settings ---- */
@@ -380,13 +604,31 @@ function saveRange(){
 
 /* ---- QUIZ ENGINE ---- */
 function genQ(k){
+  const op = (session.q && session.q.op) || "x";
   const {min,max}=k.range;
   const rnd=()=>min+Math.floor(Math.random()*(max-min+1));
-  // bias toward facts the kid gets wrong
+
+  if(op==="÷"){
+    // build a clean division: divisor b, quotient q -> dividend a = b*q
+    let b, quo;
+    if(session.q && session.q.fixed){ b=session.q.fixed; quo=1+Math.floor(Math.random()*12); }
+    else { b=Math.max(2,rnd()); quo=1+Math.floor(Math.random()*12); }
+    const a=b*quo;            // dividend
+    const ans=quo;
+    const opts=new Set([ans]);
+    while(opts.size<4){
+      let d=ans + (Math.floor(Math.random()*7)-3);
+      if(d<1) d=ans+Math.floor(Math.random()*4)+1;
+      if(d!==ans) opts.add(d);
+    }
+    const choices=[...opts].slice(0,4).sort(()=>Math.random()-.5);
+    return {a,b,ans,choices,op:"÷",prompt:a+" ÷ "+b,key:a+"÷"+b};
+  }
+
+  // multiplication (default)
   let a=rnd(), b=rnd();
-  // if a quiz is locked to one table (from Explore), force one factor
   if(session.q && session.q.fixed){ a=session.q.fixed; b=1+Math.floor(Math.random()*12); }
-  const tricky=Object.entries(k.facts).filter(([_,f])=>f.wrong>0);
+  const tricky=Object.entries(k.facts).filter(([key,f])=>f.wrong>0 && key.includes("x"));
   if(!(session.q&&session.q.fixed) && tricky.length && Math.random()<0.4){
     const pick=tricky[Math.floor(Math.random()*tricky.length)][0].split("x");
     a=+pick[0]; b=+pick[1];
@@ -400,12 +642,13 @@ function genQ(k){
     if(opts.size<4 && Math.random()<.5) opts.add(a*(b+ (Math.random()<.5?1:-1)));
   }
   const choices=[...opts].slice(0,4).sort(()=>Math.random()-.5);
-  return {a,b,ans,choices,key:a+"x"+b};
+  return {a,b,ans,choices,op:"x",prompt:a+" × "+b,key:a+"x"+b};
 }
 
 function startQuiz(mode){
   const k=session.kid;
-  session.q={mode, idx:0, correct:0, total: mode==='timed'?999:10,
+  const op = session.level ? session.level.op : "x";
+  session.q={mode, op, idx:0, correct:0, total: mode==='timed'?999:10,
              answered:0, log:[], start:Date.now(), timeLeft:60,
              speedSec:k.speedSec||5, beaten:0};
   if(mode==='timed'){
@@ -419,30 +662,35 @@ function startQuiz(mode){
 }
 function nextQuestion(){
   const k=session.kid, q=session.q;
+  // always clear any lingering per-question timer before drawing the next one
+  if(q.perTimer){ clearInterval(q.perTimer); q.perTimer=null; }
   if((q.mode==='practice'||q.mode==='speed') && q.answered>=10) return endQuiz();
   q.current=genQ(k);
   q.qStart=Date.now();
+  q.locked=false;
   drawQuiz();
   if(q.mode==='speed'){
     q.perLeft=q.speedSec;
-    if(q.perTimer) clearInterval(q.perTimer);
-    const ring=$("ring");
-    q.perTimer=setInterval(()=>{
+    const myId=setInterval(()=>{
+      // if this isn't the active timer any more, stop it
+      if(q.perTimer!==myId || q.locked){ clearInterval(myId); return; }
       q.perLeft--;
-      const el=$("timer"); if(el) el.textContent="⚡ "+q.perLeft+"s";
-      if(q.perLeft<=0){ clearInterval(q.perTimer); timeOut(); }
+      const el=$("timer"); if(el) el.textContent="⚡ "+Math.max(0,q.perLeft)+"s";
+      if(q.perLeft<=0){ clearInterval(myId); if(q.perTimer===myId) q.perTimer=null; timeOut(); }
     },1000);
+    q.perTimer=myId;
   }
 }
 function timeOut(){
   const q=session.q, c=q.current;
   if(q.locked) return; q.locked=true;
+  if(q.perTimer){ clearInterval(q.perTimer); q.perTimer=null; }
   document.querySelectorAll('.opt').forEach(b=>{ b.disabled=true; if(+b.textContent===c.ans) b.classList.add("good"); });
   const k=session.kid;
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++; f.wrong++;
-  const fb=$("fb"); fb.textContent="Too slow! "+c.a+" × "+c.b+" = "+c.ans; fb.className="feedback bad";
+  const fb=$("fb"); fb.textContent="Too slow! "+c.prompt+" = "+c.ans; fb.className="feedback bad";
   q.answered++; save();
-  setTimeout(()=>{ q.locked=false; nextQuestion(); },1300);
+  setTimeout(()=>{ nextQuestion(); },1300);
 }
 function drawQuiz(){
   const k=session.kid, q=session.q, c=q.current;
@@ -458,7 +706,7 @@ function drawQuiz(){
       ${counter}
     </div>
     <div class="progress"><div style="width:${prog}%"></div></div>
-    <div class="question">${c.a} × ${c.b}</div>
+    <div class="question">${c.prompt}</div>
     <div class="opts">
       ${c.choices.map(n=>`<button class="opt" onclick="answer(this,${n})">${n}</button>`).join("")}
     </div>
@@ -467,7 +715,7 @@ function drawQuiz(){
 function answer(el, val){
   const k=session.kid, q=session.q, c=q.current;
   if(q.locked) return; q.locked=true;
-  if(q.perTimer) clearInterval(q.perTimer);
+  if(q.perTimer){ clearInterval(q.perTimer); q.perTimer=null; }
   document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
   const fb=$("fb");
   const f = k.facts[c.key] || (k.facts[c.key]={seen:0,wrong:0});
@@ -482,7 +730,7 @@ function answer(el, val){
   } else {
     el.classList.add("bad"); f.wrong++;
     document.querySelectorAll('.opt').forEach(b=>{ if(+b.textContent===c.ans) b.classList.add("good"); });
-    fb.textContent=`${c.a} × ${c.b} = ${c.ans}`; fb.className="feedback bad";
+    fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad";
   }
   q.answered++;
   save();
@@ -586,6 +834,8 @@ function screenStickers(){
 /* ---- Explore mode: visual patterns + tricks ---- */
 function screenExplore(table){
   const k=session.kid;
+  const op = session.level ? session.level.op : "x";
+  if(op==="÷") return screenExploreDiv(table);
   if(!table){
     // table picker 1..12
     const chips=[];
@@ -633,7 +883,7 @@ function screenExplore(table){
       <h3>Where the ${t}s land</h3>
       <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:10px">${grid}</div>
     </div>
-    <button class="btn gold" onclick="(session.q={mode:'practice',correct:0,total:10,answered:0,start:Date.now(),beaten:0,fixed:${t}},nextQuestion())">Quiz me on ${t}s</button>`;
+    <button class="btn gold" onclick="(session.q={mode:'practice',op:'x',correct:0,total:10,answered:0,start:Date.now(),beaten:0,fixed:${t}},nextQuestion())">Quiz me on ${t}s</button>`;
 }
 function trickFor(t){
   const m={
@@ -649,9 +899,64 @@ function trickFor(t){
   return m[t]||null;
 }
 
+/* ---- Explore: Division (sharing & grouping) ---- */
+function screenExploreDiv(divisor){
+  const k=session.kid;
+  if(!divisor){
+    const chips=[];
+    for(let t=2;t<=12;t++) chips.push(`<button class="opt" style="padding:14px;font-size:20px" onclick="screenExploreDiv(${t})">÷${t}</button>`);
+    app.innerHTML=`
+      <div class="topbar"><button class="back" onclick="screenPath()">‹</button><h2>Explore division</h2></div>
+      <div class="card">
+        <h3>What is division?</h3>
+        <p style="font-size:15px;line-height:1.55;margin:8px 0 0">Division is <b>sharing equally</b> or <b>making equal groups</b>. 12 ÷ 3 asks: if I share 12 things into 3 equal groups, how many in each? (Answer: 4.)</p>
+        <p style="font-size:15px;line-height:1.55;margin:10px 0 0">✨ <b>Big idea:</b> division is the opposite of times tables. If 3 × 4 = 12, then 12 ÷ 3 = 4 and 12 ÷ 4 = 3. Knowing your tables means you already know division!</p>
+      </div>
+      <div class="card">
+        <p class="muted center" style="margin-top:0">Pick a number to divide by.</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">${chips}</div>
+      </div>`;
+    return;
+  }
+  const d=divisor;
+  // sharing facts: d*q ÷ d = q, tap to reveal
+  let facts='';
+  for(let q=1;q<=12;q++){
+    const dividend=d*q;
+    facts+=`<button class="statline" style="width:100%;background:none;border:none;border-bottom:1px solid var(--line);color:var(--ink)" onclick="this.querySelector('.rv').textContent='= ${q}';this.querySelector('.rv').style.color='var(--gold2)'">
+      <span>${dividend} ÷ ${d}</span><b class="rv" style="color:var(--muted)">tap</b></button>`;
+  }
+  // visual: 12 ÷ 3 style dots into groups (use d groups of 4 as an example)
+  const exampleQ=4, dots=[];
+  for(let g=0;g<d;g++){
+    let group='';
+    for(let i=0;i<exampleQ;i++) group+='🔵';
+    dots.push(`<div style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;font-size:16px">${group}</div>`);
+  }
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenExploreDiv()">‹</button><h2>Dividing by ${d}</h2></div>
+    <div class="card">
+      <h3>See it: ${d*exampleQ} ÷ ${d}</h3>
+      <p class="muted" style="font-size:14px;margin:6px 0 10px">Share ${d*exampleQ} into ${d} equal groups — count one group.</p>
+      <div style="display:grid;grid-template-columns:repeat(${Math.min(d,4)},1fr);gap:8px">${dots.join("")}</div>
+      <p style="font-size:15px;margin:12px 0 0">${d} groups, <b>${exampleQ} in each</b> → ${d*exampleQ} ÷ ${d} = ${exampleQ}.</p>
+    </div>
+    <div class="card">
+      <h3>✨ Trick: flip the times table</h3>
+      <p style="font-size:15px;line-height:1.55;margin:8px 0 0">To work out ${d*7} ÷ ${d}, ask "${d} times what makes ${d*7}?" → ${d} × 7 = ${d*7}, so the answer is 7.</p>
+    </div>
+    <div class="card">
+      <h3>Tap to reveal</h3>
+      <div style="margin-top:6px">${facts}</div>
+    </div>
+    <button class="btn gold" onclick="(session.q={mode:'practice',op:'÷',correct:0,total:10,answered:0,start:Date.now(),beaten:0,fixed:${d}},nextQuestion())">Quiz me on ÷${d}</button>`;
+}
+
 /* ---- Pop the answer (arcade) ---- */
 function startPop(){
   const k=session.kid;
+  const op = session.level ? session.level.op : "x";
+  session.q={op}; // op context only (genQ reads session.q.op)
   session.pop={score:0, answered:0, total:10, start:Date.now()};
   popNext();
 }
@@ -674,7 +979,7 @@ function popNext(){
       <span class="pill">✅ ${p.score}</span>
       <span class="pill">${p.answered+1} / ${p.total}</span>
     </div>
-    <div class="question" style="margin:14px 0">${c.a} × ${c.b}</div>
+    <div class="question" style="margin:14px 0">${c.prompt}</div>
     <div id="poparea" style="position:relative;height:46vh;overflow:hidden;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#0b1a2c,#10243c)">
       ${bubbles}
     </div>
@@ -690,7 +995,7 @@ function popHit(val, missed){
   const fb=$("fb");
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
   if(val===c.ans){ p.score++; k.stars++; fb.textContent=pick(["Pop! 🎉","Got it!","Nice shot!","Boom!"]); fb.className="feedback good"; }
-  else { f.wrong++; fb.textContent=`${c.a} × ${c.b} = ${c.ans}`; fb.className="feedback bad"; }
+  else { f.wrong++; fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
   p.answered++;
   const unlocked=checkStickers(k); save();
   if(unlocked.length) toast("🎉 New sticker: "+unlocked.join(" "));
