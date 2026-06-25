@@ -167,15 +167,15 @@ function award(k, correct){
   if(correct){ k.stars++; k.coins=(k.coins||0)+1; }
 }
 const SHOP_AVATARS = ["🐵","🐰","🐺","🦝","🐹","🐱","🐮","🐷","🐗","🦔","🐭","🐔","🦇","🦅","🦈","🐊"];
-const AVATAR_COST = 25;
+const AVATAR_COST = 100;
 function ownsAvatar(k,a){ return (k.avatarsOwned||[]).includes(a); }
 
 /* Tiered premium stickers: Common -> Rare -> Epic -> Legendary */
 const TIERS=[
-  {tier:"Common",   cost:40,  color:"#7fa6c9"},
-  {tier:"Rare",     cost:90,  color:"#4fc3f7"},
-  {tier:"Epic",     cost:180, color:"#b388ff"},
-  {tier:"Legendary",cost:350, color:"#ffca28"}
+  {tier:"Common",   cost:200,  color:"#7fa6c9"},
+  {tier:"Rare",     cost:450,  color:"#4fc3f7"},
+  {tier:"Epic",     cost:900,  color:"#b388ff"},
+  {tier:"Legendary",cost:1800, color:"#ffca28"}
 ];
 const SHOP_STICKERS=[
   // Common
@@ -221,7 +221,14 @@ function migrateDB(){
     if(!k.history) k.history=[];
     if(!k.facts) k.facts={};
     if(k.stars==null) k.stars=0;
+    if(!k.stageSpeed) k.stageSpeed={};  // levelId:stageIdx -> true once speed drill passed
   });
+  // One-time economy reset: zero all coins when upgrading to the new pricing
+  if(DB.econVersion!==2){
+    (DB.kids||[]).forEach(k=>{ k.coins=0; });
+    DB.econVersion=2;
+    try{ window.localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }catch(e){}
+  }
 }
 function save(){
   try{ window.localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
@@ -244,6 +251,7 @@ function newKid(name, avatar, pin){
     avatarsOwned:[avatar],       // avatars unlocked (starts with their chosen one)
     levelsUnlocked:["tables"],
     stageProgress:{},            // levelId -> index of highest CLEARED stage (-1 = none)
+    stageSpeed:{},               // "levelId:stageIdx" -> true once speed drill passed
     lessonsSeen:{},              // "levelId:stageIdx" -> true
     belts:{},                    // levelId -> belt index reached
     streak:0,                    // consecutive days
@@ -537,7 +545,7 @@ function stageLesson(){
       ${body}
     </div>
     <div class="card center">
-      <p class="muted" style="margin-top:0">Ready? The test is 10 questions. Get them all right to clear the stage — slip-ups just get retried.</p>
+      <p class="muted" style="margin-top:0">Ready? Two gates to clear this stage: <b>1)</b> a 10/10 test, then <b>2)</b> a speed drill (all 10 in time). Slip-ups just get retried.</p>
       <button class="btn gold" onclick="startStageTest()">Start the test</button>
       <div style="height:8px"></div>
       <button class="btn ghost" onclick="practiceStage()">Practise first (no pressure)</button>
@@ -593,39 +601,19 @@ function stageTestEnd(){
   const k=session.kid, t=session.stest, lv=t.lv, st=t.stage;
   const passed = t.missed.length===0;
   if(passed){
-    // clear this stage if it's the next uncleared
-    const prev=clearedStage(k,lv.id);
-    let beltUp=false, levelDone=false, newBelt="";
-    if(st.idx===prev+1){
-      k.stageProgress[lv.id]=st.idx;
-      const before=beltFor(k,lv.id);
-      // recompute belt
-      const after=beltFor(k,lv.id);
-      // (belt already reflects new progress)
-      newBelt=BELTS[beltFor(k,lv.id)];
-      // if this was the final (mixed) stage, unlock next level
-      const stages=stagesFor(lv.id);
-      if(st.idx===stages.length-1){
-        levelDone=true;
-        const nxt=nextLevel(lv.id);
-        if(nxt && !nxt.soon && !isUnlocked(k,nxt.id)) k.levelsUnlocked.push(nxt.id);
-      }
-    }
-    k.history.push({date:Date.now(), mode:'stage', topic:lv.name+" "+st.def.name, score:10, total:10, timeSec:0});
-    const unlocked=checkStickers(k); save();
-    const stages=stagesFor(lv.id);
-    const nextStage = stages[st.idx+1];
+    k.history.push({date:Date.now(), mode:'stagetest', topic:lv.name+" "+st.def.name, score:10, total:10, timeSec:0});
+    save();
+    // Stage is NOT cleared yet — the speed drill is compulsory next.
     app.innerHTML=`
       <div class="card center" style="border-color:var(--green)">
-        <div style="font-size:48px">🎉</div>
-        <h2>${st.def.name} cleared!</h2>
-        <div class="big">10/10</div>
-        <p class="muted">+10 ⭐ &nbsp; +10 🪙 &nbsp;·&nbsp; ${BELTS[beltFor(k,lv.id)]} Belt</p>
+        <div style="font-size:48px">✅</div>
+        <h2>Test passed — 10/10!</h2>
+        <p class="muted">Now the fluency gate: a speed round. You need all 10 <b>in time</b> to clear ${st.def.name}.</p>
       </div>
-      ${levelDone?`<div class="card center" style="border-color:var(--gold)"><div style="font-size:40px">${lv.icon}🏆</div><h3>${lv.name} fully mastered!</h3>${nextLevel(lv.id)&&!nextLevel(lv.id).soon?`<p class="muted">${nextLevel(lv.id).name} is now unlocked.</p>`:''}</div>`:''}
       <div class="card center">
-        ${nextStage?`<button class="btn gold" onclick="openStage(${st.idx+1})">Next: ${nextStage.name} →</button><div style="height:8px"></div>`:''}
-        <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
+        <button class="btn gold" onclick="startStageSpeed()">⚡ Start speed drill</button>
+        <div style="height:8px"></div>
+        <button class="btn ghost" onclick="screenLevel()">Later</button>
       </div>`;
     return;
   }
@@ -641,6 +629,117 @@ function stageTestEnd(){
         ? `<button class="btn gold" onclick="session.stest.attempt++;stageTestBuild(false)">Retry missed ones</button>`
         : `<button class="btn gold" onclick="stageLesson()">Review the lesson</button>`}
       <div style="height:8px"></div>
+      <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
+    </div>`;
+}
+
+/* ---- Compulsory stage SPEED drill: all 10 in time, retry missed ---- */
+function startStageSpeed(){
+  const k=session.kid, lv=session.level, st=session.stage, s=st.def;
+  session.sspeed={lv, stage:st, speedSec:k.speedSec||5, queue:null, missed:[], correct:0};
+  stageSpeedBuild(true);
+}
+function stageSpeedBuild(fresh){
+  const k=session.kid, sp=session.sspeed, s=sp.stage.def, lv=sp.lv;
+  if(fresh){
+    sp.queue=[];
+    for(let i=0;i<10;i++){ session.q={op:lv.op, fixed:s.mixed?null:s.f}; sp.queue.push(genQ(k)); }
+    session.q=null;
+  } else { sp.queue=sp.missed.slice(); }
+  sp.idx=0; sp.correct=0; sp.total=sp.queue.length; sp.missed=[]; sp.locked=false;
+  stageSpeedNext();
+}
+function stageSpeedNext(){
+  const sp=session.sspeed;
+  if(sp.timer){ clearInterval(sp.timer); sp.timer=null; }
+  if(sp.idx>=sp.queue.length) return stageSpeedEnd();
+  sp.current=sp.queue[sp.idx];
+  sp.locked=false;
+  const c=sp.current;
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="exitStageSpeed()">✕</button>
+      <span class="pill" style="color:var(--gold)">⚡ ${sp.stage.def.name}</span>
+      <span class="pill timer" id="timer">⚡ ${sp.speedSec}s</span></div>
+    <div class="progress"><div style="width:${(sp.idx/sp.queue.length)*100}%"></div></div>
+    <div class="question">${c.prompt}</div>
+    <div class="opts">${c.choices.map(n=>`<button class="opt" onclick="stageSpeedAns(this,${n})">${n}</button>`).join("")}</div>
+    <div class="feedback" id="fb"></div>`;
+  sp.left=sp.speedSec;
+  const myId=setInterval(()=>{
+    if(sp.timer!==myId || sp.locked){ clearInterval(myId); return; }
+    sp.left--;
+    const el=$("timer"); if(el) el.textContent="⚡ "+Math.max(0,sp.left)+"s";
+    if(sp.left<=0){ clearInterval(myId); if(sp.timer===myId) sp.timer=null; stageSpeedTimeout(); }
+  },1000);
+  sp.timer=myId;
+}
+function stageSpeedTimeout(){
+  const sp=session.sspeed, c=sp.current;
+  if(sp.locked) return; sp.locked=true;
+  if(sp.timer){ clearInterval(sp.timer); sp.timer=null; }
+  document.querySelectorAll('.opt').forEach(b=>{ b.disabled=true; if(+b.textContent===c.ans) b.classList.add("good"); });
+  sp.missed.push(c);
+  const fb=$("fb"); if(fb){ fb.textContent="Too slow! "+c.prompt+" = "+c.ans; fb.className="feedback bad"; }
+  sp.idx++;
+  setTimeout(()=>stageSpeedNext(),1200);
+}
+function stageSpeedAns(el,val){
+  const k=session.kid, sp=session.sspeed, c=sp.current;
+  if(sp.locked) return; sp.locked=true;
+  if(sp.timer){ clearInterval(sp.timer); sp.timer=null; }
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+  const fb=$("fb");
+  const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
+  if(val===c.ans){ el.classList.add("good"); if(fb){fb.textContent="⚡ In time!"; fb.className="feedback good";} sp.correct++; award(k,true); }
+  else { el.classList.add("bad"); f.wrong++; sp.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); if(fb){fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad";} }
+  sp.idx++; save();
+  setTimeout(()=>stageSpeedNext(), val===c.ans?500:1100);
+}
+function exitStageSpeed(){ const sp=session.sspeed; if(sp&&sp.timer){clearInterval(sp.timer);sp.timer=null;} screenLevel(); }
+function stageSpeedEnd(){
+  const k=session.kid, sp=session.sspeed, lv=sp.lv, st=sp.stage;
+  if(sp.timer){ clearInterval(sp.timer); sp.timer=null; }
+  const allInTime = sp.missed.length===0;
+  if(!allInTime){
+    save();
+    app.innerHTML=`
+      <div class="card center">
+        <div style="font-size:46px">⏱️</div>
+        <h2>${sp.correct}/10 in time</h2>
+        <p class="muted">Almost! Speed up on the ${sp.missed.length} you missed — retry just those to clear the stage.</p>
+        <button class="btn gold" onclick="stageSpeedBuild(false)">⚡ Retry missed ones</button>
+        <div style="height:8px"></div>
+        <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
+      </div>`;
+    return;
+  }
+  // PASSED both gates -> clear the stage now
+  const prev=clearedStage(k,lv.id);
+  let levelDone=false;
+  if(st.idx===prev+1){
+    k.stageProgress[lv.id]=st.idx;
+    if(!k.stageSpeed) k.stageSpeed={};
+    k.stageSpeed[lv.id+":"+st.idx]=true;
+    const stages=stagesFor(lv.id);
+    if(st.idx===stages.length-1){
+      levelDone=true;
+      const nxt=nextLevel(lv.id);
+      if(nxt && !nxt.soon && !isUnlocked(k,nxt.id)) k.levelsUnlocked.push(nxt.id);
+    }
+  }
+  k.history.push({date:Date.now(), mode:'stage', topic:lv.name+" "+st.def.name, score:10, total:10, timeSec:0});
+  const unlocked=checkStickers(k); save();
+  const stages=stagesFor(lv.id);
+  const nextStage=stages[st.idx+1];
+  app.innerHTML=`
+    <div class="card center" style="border-color:var(--green)">
+      <div style="font-size:48px">🎉⚡</div>
+      <h2>${st.def.name} cleared!</h2>
+      <p class="muted">Test ✅ and speed drill ⚡ both passed &nbsp;·&nbsp; ${BELTS[beltFor(k,lv.id)]} Belt</p>
+    </div>
+    ${levelDone?`<div class="card center" style="border-color:var(--gold)"><div style="font-size:40px">${lv.icon}🏆</div><h3>${lv.name} fully mastered!</h3>${nextLevel(lv.id)&&!nextLevel(lv.id).soon?`<p class="muted">${nextLevel(lv.id).name} is now unlocked.</p>`:''}</div>`:''}
+    <div class="card center">
+      ${nextStage?`<button class="btn gold" onclick="openStage(${st.idx+1})">Next: ${nextStage.name} →</button><div style="height:8px"></div>`:''}
       <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
     </div>`;
 }
