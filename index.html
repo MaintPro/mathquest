@@ -175,12 +175,31 @@ function ownsAvatar(k,a){ return (k.avatarsOwned||[]).includes(a); }
 let _memFallback = false;
 const PARENT_CODE = "246810";  // 6-digit code to enter the Parent area
 let DB = load();
+migrateDB();
 function load(){
   try{
     const raw = window.localStorage.getItem(STORE_KEY);
     return raw ? (JSON.parse(raw) || {kids:[]}) : {kids:[]};
   }
   catch(e){ _memFallback = true; return {kids:[]}; }
+}
+/* Backfill fields added in later versions so older saved kids don't crash */
+function migrateDB(){
+  (DB.kids||[]).forEach(k=>{
+    if(k.coins==null) k.coins=0;
+    if(!k.avatarsOwned) k.avatarsOwned=[k.avatar];
+    if(!k.levelsUnlocked) k.levelsUnlocked=["tables"];
+    if(!k.stageProgress) k.stageProgress={};
+    if(!k.lessonsSeen) k.lessonsSeen={};
+    if(!k.belts) k.belts={};
+    if(k.streak==null) k.streak=0;
+    if(!k.stickers) k.stickers=[];
+    if(!k.range) k.range={min:1,max:12};
+    if(k.speedSec==null) k.speedSec=5;
+    if(!k.history) k.history=[];
+    if(!k.facts) k.facts={};
+    if(k.stars==null) k.stars=0;
+  });
 }
 function save(){
   try{ window.localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
