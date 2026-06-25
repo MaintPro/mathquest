@@ -1367,8 +1367,10 @@ function startPop(){
   session.pop={score:0, answered:0, total:10, start:Date.now()};
   popNext();
 }
+function exitPop(){ const p=session.pop; if(p){ p.done=true; if(p.timeout) clearTimeout(p.timeout); } screenModes(); }
 function popNext(){
   const k=session.kid, p=session.pop;
+  if(p.timeout) clearTimeout(p.timeout);
   if(p.answered>=p.total) return popEnd();
   const c=genQ(k); p.current=c;
   // build bubbles from the 4 choices
@@ -1382,7 +1384,7 @@ function popNext(){
   }).join("");
   app.innerHTML=`
     <div class="qtop">
-      <button class="back" onclick="screenModes()">✕</button>
+      <button class="back" onclick="exitPop()">✕</button>
       <span class="pill">✅ ${p.score}</span>
       <span class="pill">${p.answered+1} / ${p.total}</span>
     </div>
@@ -1395,11 +1397,14 @@ function popNext(){
   p.timeout=setTimeout(()=>popHit(null,true), 6200);
 }
 function popHit(val, missed){
-  const k=session.kid, p=session.pop, c=p.current;
+  const p=session.pop, k=session.kid;
+  const fb=$("fb");
+  // if the Pop screen is no longer active (user left, or game ended), do nothing
+  if(!p || !p.current || !fb || p.done){ if(p&&p.timeout) clearTimeout(p.timeout); return; }
+  const c=p.current;
   if(p.locked) return; p.locked=true;
   clearTimeout(p.timeout);
   document.querySelectorAll('.bubble').forEach(b=>{b.style.animationPlayState='paused'; b.disabled=true;});
-  const fb=$("fb");
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
   if(val===c.ans){ p.score++; award(k,true); fb.textContent=pick(["Pop! 🎉","Got it!","Nice shot!","Boom!"]); fb.className="feedback good"; }
   else { f.wrong++; fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
@@ -1410,6 +1415,7 @@ function popHit(val, missed){
 }
 function popEnd(){
   const k=session.kid, p=session.pop;
+  p.done=true; if(p.timeout) clearTimeout(p.timeout);
   k.history.push({date:Date.now(), mode:'pop', topic:"Times tables", score:p.score, total:p.answered, timeSec:Math.round((Date.now()-p.start)/1000)});
   if(k.history.length>200) k.history=k.history.slice(-200);
   const unlocked=checkStickers(k); save();
