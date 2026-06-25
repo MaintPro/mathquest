@@ -167,10 +167,31 @@ function award(k, correct){
   if(correct){ k.stars++; k.coins=(k.coins||0)+1; }
 }
 const SHOP_AVATARS = ["🐵","🐰","🐺","🦝","🐹","🐱","🐮","🐷","🐗","🦔","🐭","🐔","🦇","🦅","🦈","🐊"];
-const SHOP = [
-  ...SHOP_AVATARS.map(a=>({type:"avatar",emoji:a,cost:15,label:"Avatar "+a}))
-];
+const AVATAR_COST = 25;
 function ownsAvatar(k,a){ return (k.avatarsOwned||[]).includes(a); }
+
+/* Tiered premium stickers: Common -> Rare -> Epic -> Legendary */
+const TIERS=[
+  {tier:"Common",   cost:40,  color:"#7fa6c9"},
+  {tier:"Rare",     cost:90,  color:"#4fc3f7"},
+  {tier:"Epic",     cost:180, color:"#b388ff"},
+  {tier:"Legendary",cost:350, color:"#ffca28"}
+];
+const SHOP_STICKERS=[
+  // Common
+  {id:"c1",emoji:"🌟",tier:0,name:"Gold Star"},{id:"c2",emoji:"🍀",tier:0,name:"Lucky Clover"},
+  {id:"c3",emoji:"🎈",tier:0,name:"Balloon"},{id:"c4",emoji:"🌈",tier:0,name:"Rainbow"},
+  // Rare
+  {id:"r1",emoji:"🦄",tier:1,name:"Unicorn"},{id:"r2",emoji:"🚀",tier:1,name:"Rocket"},
+  {id:"r3",emoji:"🐉",tier:1,name:"Dragon"},{id:"r4",emoji:"⚡",tier:1,name:"Lightning"},
+  // Epic
+  {id:"e1",emoji:"👑",tier:2,name:"Crown"},{id:"e2",emoji:"💎",tier:2,name:"Diamond"},
+  {id:"e3",emoji:"🔥",tier:2,name:"Phoenix Fire"},{id:"e4",emoji:"🌌",tier:2,name:"Galaxy"},
+  // Legendary
+  {id:"L1",emoji:"🏆",tier:3,name:"Champion Trophy"},{id:"L2",emoji:"🦖",tier:3,name:"T‑Rex"},
+  {id:"L3",emoji:"🛸",tier:3,name:"UFO"},{id:"L4",emoji:"🐲",tier:3,name:"Mega Dragon"}
+];
+function ownsSticker(k,id){ return (k.shopStickers||[]).includes(id); }
 
 let _memFallback = false;
 const PARENT_CODE = "246810";  // 6-digit code to enter the Parent area
@@ -194,6 +215,7 @@ function migrateDB(){
     if(!k.belts) k.belts={};
     if(k.streak==null) k.streak=0;
     if(!k.stickers) k.stickers=[];
+    if(!k.shopStickers) k.shopStickers=[];
     if(!k.range) k.range={min:1,max:12};
     if(k.speedSec==null) k.speedSec=5;
     if(!k.history) k.history=[];
@@ -218,6 +240,7 @@ function newKid(name, avatar, pin){
     stars:0,
     coins:0,                     // earned per correct answer; spent in shop
     stickers:[],
+    shopStickers:[],             // premium stickers bought with coins
     avatarsOwned:[avatar],       // avatars unlocked (starts with their chosen one)
     levelsUnlocked:["tables"],
     stageProgress:{},            // levelId -> index of highest CLEARED stage (-1 = none)
@@ -496,13 +519,15 @@ function stageLesson(){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
   let body;
   if(s.mixed){
-    body=`<p style="font-size:15px;line-height:1.6">This is the big one — <b>all of them mixed together</b>. No single pattern to lean on; you just need to know your ${lv.name.toLowerCase()}. Take your time, and use the tricks you've learned for each one.</p>`;
+    body=`<p style="font-size:15px;line-height:1.6">This is the big one — <b>all of them mixed together</b>. No single pattern to lean on; you just need to know your ${lv.name.toLowerCase()}. Take your time, and use the tricks you've learned for each one.</p>
+      <p style="font-size:14px;color:var(--cyan2);font-weight:700;margin:12px 0 4px">💡 Tip</p>
+      <p style="font-size:15px;line-height:1.55;margin:0">If one fact stumps you, rebuild it from a nearby one you know — e.g. forgot 7×8? Do 7×4=28, then double it to 56.</p>`;
   } else if(lv.op==="x"){
-    body=`<p style="font-size:15px;line-height:1.6">${trickFor(s.f)||('Count up in '+s.f+'s: '+[1,2,3,4,5].map(n=>s.f*n).join(", ")+'…')}</p>
-      <div class="seg" style="margin-top:12px">${[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>`<span class="chip" style="font-size:14px">${s.f}×${n}=${s.f*n}</span>`).join("")}</div>`;
+    body=`${renderMultLesson(s.f)}
+      <div class="seg" style="margin-top:14px">${[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>`<span class="chip" style="font-size:14px">${s.f}×${n}=${s.f*n}</span>`).join("")}</div>`;
   } else {
-    body=`<p style="font-size:15px;line-height:1.6">Dividing by ${s.f} is the reverse of the ${s.f}× table. To find ${s.f*6} ÷ ${s.f}, ask "${s.f} times what makes ${s.f*6}?" → 6.</p>
-      <div class="seg" style="margin-top:12px">${[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>`<span class="chip" style="font-size:14px">${s.f*n}÷${s.f}=${n}</span>`).join("")}</div>`;
+    body=`${renderDivLesson(s.f)}
+      <div class="seg" style="margin-top:14px">${[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>`<span class="chip" style="font-size:14px">${s.f*n}÷${s.f}=${n}</span>`).join("")}</div>`;
   }
   k.lessonsSeen[lv.id+":"+st.idx]=true; save();
   app.innerHTML=`
@@ -1051,30 +1076,68 @@ function screenReport(){
 /* ---- Coin shop ---- */
 function screenShop(){
   const k=session.kid;
-  const cells=SHOP_AVATARS.map(a=>{
-    const owned=ownsAvatar(k,a);
-    const active=k.avatar===a;
-    return `<div style="text-align:center">
-      <div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:34px;border-radius:14px;
-        border:2px solid ${active?'var(--gold)':'var(--line)'};background:${owned?'linear-gradient(180deg,#173a2e,#102a22)':'var(--bg2)'}">${a}</div>
-      ${owned
-        ? (active?`<div style="font-size:12px;color:var(--gold);margin-top:4px">Wearing</div>`
-                : `<button class="chip" style="margin-top:4px" onclick="wearAvatar('${a}')">Wear</button>`)
-        : `<button class="chip" style="margin-top:4px" onclick="buyAvatar('${a}')">🪙 15</button>`}
+  // tiered sticker sections
+  const tierSections=TIERS.map((T,ti)=>{
+    const items=SHOP_STICKERS.filter(s=>s.tier===ti).map(s=>{
+      const owned=ownsSticker(k,s.id);
+      const afford=(k.coins||0)>=T.cost;
+      return `<div style="text-align:center">
+        <div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:36px;border-radius:14px;
+          border:2px solid ${owned?T.color:'var(--line)'};background:${owned?'linear-gradient(180deg,#2a1f4d,#1c1535)':'var(--bg2)'};${owned?'':'filter:grayscale(.6);opacity:.85'}">${s.emoji}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">${s.name}</div>
+        ${owned
+          ? `<div style="font-size:11px;color:${T.color};font-weight:700">Owned ✓</div>`
+          : `<button class="chip" style="margin-top:3px;${afford?'':'opacity:.5'}" onclick="buySticker('${s.id}')">🪙 ${T.cost}</button>`}
+      </div>`;
+    }).join("");
+    return `<div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="width:14px;height:14px;border-radius:4px;background:${T.color};display:inline-block"></span>
+        <h3 style="margin:0">${T.tier}</h3>
+        <span class="muted" style="font-size:13px">· ${T.cost} 🪙 each</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">${items}</div>
     </div>`;
   }).join("");
+
+  // avatars
+  const avCells=SHOP_AVATARS.map(a=>{
+    const owned=ownsAvatar(k,a), active=k.avatar===a;
+    return `<div style="text-align:center">
+      <div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:32px;border-radius:14px;
+        border:2px solid ${active?'var(--gold)':'var(--line)'};background:${owned?'linear-gradient(180deg,#173a2e,#102a22)':'var(--bg2)'}">${a}</div>
+      ${owned
+        ? (active?`<div style="font-size:11px;color:var(--gold);margin-top:3px">Wearing</div>`
+                : `<button class="chip" style="margin-top:3px" onclick="wearAvatar('${a}')">Wear</button>`)
+        : `<button class="chip" style="margin-top:3px;${(k.coins||0)>=AVATAR_COST?'':'opacity:.5'}" onclick="buyAvatar('${a}')">🪙 ${AVATAR_COST}</button>`}
+    </div>`;
+  }).join("");
+
+  const owned=(k.shopStickers||[]).length, totalS=SHOP_STICKERS.length;
   app.innerHTML=`
     <div class="topbar"><button class="back" onclick="screenPath()">‹</button><h2>🛍️ Coin shop</h2>
       <div class="spacer"></div><span class="pill">🪙 ${k.coins||0}</span></div>
+    <div class="card center" style="padding:14px 18px">
+      <p class="muted" style="margin:0">Earn 1 🪙 per correct answer. Save up for rarer stickers — ${owned}/${totalS} collected.</p>
+    </div>
+    ${tierSections}
     <div class="card">
-      <p class="muted center" style="margin-top:0">Earn coins by answering correctly. Spend them on new avatars!</p>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">${cells}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><h3 style="margin:0">🧑‍🚀 Avatars</h3><span class="muted" style="font-size:13px">· ${AVATAR_COST} 🪙 each</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">${avCells}</div>
     </div>`;
+}
+function buySticker(id){
+  const k=session.kid;
+  const s=SHOP_STICKERS.find(x=>x.id===id); if(!s) return;
+  const cost=TIERS[s.tier].cost;
+  if(ownsSticker(k,id)) return;
+  if((k.coins||0)<cost) return toast("Need "+cost+" 🪙 — keep earning!");
+  k.coins-=cost; k.shopStickers=k.shopStickers||[]; k.shopStickers.push(id);
+  save(); toast("Unlocked "+s.name+" "+s.emoji+"!"); screenShop();
 }
 function buyAvatar(a){
   const k=session.kid;
-  if((k.coins||0)<15) return toast("Need 15 🪙 — keep practising!");
-  k.coins-=15; k.avatarsOwned=k.avatarsOwned||[]; k.avatarsOwned.push(a);
+  if((k.coins||0)<AVATAR_COST) return toast("Need "+AVATAR_COST+" 🪙 — keep practising!");
+  k.coins-=AVATAR_COST; k.avatarsOwned=k.avatarsOwned||[]; k.avatarsOwned.push(a);
   k.avatar=a; save(); toast("Unlocked "+a+"!"); screenShop();
 }
 function wearAvatar(a){ const k=session.kid; k.avatar=a; save(); screenShop(); }
@@ -1091,14 +1154,25 @@ function screenStickers(){
       background:${got?'linear-gradient(180deg,#2a1f4d,#1c1535)':'var(--bg2)'};
       ${got?'':'filter:grayscale(1);opacity:.35'}">${got?s:'❓'}</div>`;
   }).join("");
+  const premium=(k.shopStickers||[]).map(id=>{
+    const s=SHOP_STICKERS.find(x=>x.id===id); if(!s) return '';
+    const col=TIERS[s.tier].color;
+    return `<div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      font-size:30px;border-radius:16px;border:2px solid ${col};background:linear-gradient(180deg,#2a1f4d,#1c1535)">${s.emoji}<span style="font-size:9px;color:${col};margin-top:2px">${TIERS[s.tier].tier}</span></div>`;
+  }).join("");
   app.innerHTML=`
     <div class="topbar"><button class="back" onclick="screenModes()">‹</button><h2>My stickers</h2></div>
     <div class="card center">
       <div class="big" style="font-size:34px">${have.length} / ${STICKERS.length}</div>
-      <p class="muted">${have.length<STICKERS.length?`${toNext} more stars to your next sticker ⭐`:'Full collection — amazing! 🏆'}</p>
+      <p class="muted">${have.length<STICKERS.length?`${toNext} more stars to your next free sticker ⭐`:'Star collection complete — amazing! 🏆'}</p>
     </div>
     <div class="card">
+      <h3 style="margin:0 0 10px">⭐ Earned with stars</h3>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">${cells}</div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 10px">🛍️ Bought with coins</h3>
+      ${premium?`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">${premium}</div>`:`<p class="muted" style="margin:0;font-size:14px">None yet — earn coins and visit the shop to collect rare stickers!</p>`}
     </div>`;
 }
 
@@ -1156,6 +1230,68 @@ function screenExplore(table){
     </div>
     <button class="btn gold" onclick="(session.q={mode:'practice',op:'x',correct:0,total:10,answered:0,start:Date.now(),beaten:0,fixed:${t}},nextQuestion())">Quiz me on ${t}s</button>`;
 }
+/* ---- Rich lesson content for each times table ----
+   Each: tricks[] (one or more), why (why it works), example (worked) */
+const MULT_LESSONS={
+  1:{tricks:["Anything × 1 stays exactly the same."],
+     why:"Multiplying by 1 means you have just one group of the number — so nothing changes.",
+     example:"1 × 8 = 8, because one group of 8 is just 8."},
+  2:{tricks:["Doubling — add the number to itself.","All answers are even (end in 0,2,4,6,8)."],
+     why:"× 2 means two groups, which is the same as adding the number to itself.",
+     example:"2 × 7 = 7 + 7 = 14."},
+  3:{tricks:["Double the number, then add one more of it.","Trick to check: add the digits of the answer — they add to a multiple of 3."],
+     why:"× 3 is three groups: double it (×2) then add one more group.",
+     example:"3 × 6 → double 6 is 12, plus 6 = 18."},
+  4:{tricks:["Double, then double again.","Answers are always even."],
+     why:"× 4 is the same as ×2 twice, because 4 = 2 × 2.",
+     example:"4 × 6 → double 6 is 12, double again is 24."},
+  5:{tricks:["Every answer ends in 5 or 0.","Quick way: × 10 then halve it.","Count like a clock: 5, 10, 15, 20…"],
+     why:"5 is half of 10, so the fives land exactly halfway between the tens.",
+     example:"5 × 8 → 10 × 8 = 80, half of 80 = 40."},
+  6:{tricks:["× 6 of an even number ends in that same number's pattern: 6×2=12, 6×4=24, 6×6=36, 6×8=48.","Or do × 5 then add one more group."],
+     why:"× 6 is ×5 plus one more group, because 6 = 5 + 1.",
+     example:"6 × 7 → 5 × 7 = 35, plus 7 = 42."},
+  7:{tricks:["The tricky one — lean on tables you know: × 5 then add × 2.","7 × 8 = 56 is worth memorising (5,6,7,8!)."],
+     why:"7 = 5 + 2, so split it into a ×5 and a ×2 and add them.",
+     example:"7 × 6 → 5 × 6 = 30, plus 2 × 6 = 12, total 42."},
+  8:{tricks:["Double three times.","Or do × 10 then subtract × 2."],
+     why:"8 = 2 × 2 × 2, so doubling three times gets you there. Also 8 = 10 − 2.",
+     example:"8 × 3 → 3 → 6 → 12 → 24. Or 10×3=30 minus 2×3=6 → 24."},
+  9:{tricks:["Finger trick: hold up 10 fingers, fold the one you're multiplying by. Fingers before = tens, after = ones.","The digits of every answer add up to 9.","Fastest way: × 10 then subtract one group."],
+     why:"9 is one less than 10, so 9×n is just 10×n minus one n.",
+     example:"9 × 4 → 10 × 4 = 40, minus 4 = 36. (And 3 + 6 = 9!)"},
+  10:{tricks:["Just add a zero to the number."],
+     why:"Our number system is base‑10, so ×10 shifts every digit one place up.",
+     example:"10 × 7 = 70."},
+  11:{tricks:["For 11 × a single digit, write the digit twice.","For bigger numbers, add the two digits and put the sum in the middle."],
+     why:"11 = 10 + 1, so 11×n is 10×n plus one more n, which lines the digits up neatly.",
+     example:"11 × 3 = 33. 11 × 7 = 77."},
+  12:{tricks:["Do × 10 then add × 2.","Or × 6 then double."],
+     why:"12 = 10 + 2, so split into a ×10 and a ×2 and add.",
+     example:"12 × 4 → 10 × 4 = 40, plus 2 × 4 = 8, total 48."}
+};
+function renderMultLesson(f){
+  const L=MULT_LESSONS[f]; if(!L) return `<p>Count up in ${f}s.</p>`;
+  const tricks=L.tricks.map(t=>`<li style="margin:6px 0">${t}</li>`).join("");
+  return `<p style="font-size:14px;color:var(--gold2);font-weight:700;margin:0 0 4px">✨ ${L.tricks.length>1?'Tricks':'Trick'}</p>
+    <ul style="font-size:15px;line-height:1.5;margin:0 0 12px;padding-left:20px">${tricks}</ul>
+    <p style="font-size:14px;color:var(--cyan2);font-weight:700;margin:0 0 4px">🤔 Why it works</p>
+    <p style="font-size:15px;line-height:1.55;margin:0 0 12px">${L.why}</p>
+    <p style="font-size:14px;color:var(--green);font-weight:700;margin:0 0 4px">📝 Example</p>
+    <p style="font-size:15px;line-height:1.55;margin:0">${L.example}</p>`;
+}
+function renderDivLesson(f){
+  return `<p style="font-size:14px;color:var(--gold2);font-weight:700;margin:0 0 4px">✨ Trick</p>
+    <ul style="font-size:15px;line-height:1.5;margin:0 0 12px;padding-left:20px">
+      <li style="margin:6px 0">Flip it into a times-table question: ${f*6} ÷ ${f} asks "${f} × what = ${f*6}?"</li>
+      <li style="margin:6px 0">If you know your ${f}× table, you already know every ÷${f} fact.</li>
+    </ul>
+    <p style="font-size:14px;color:var(--cyan2);font-weight:700;margin:0 0 4px">🤔 Why it works</p>
+    <p style="font-size:15px;line-height:1.55;margin:0 0 12px">Division undoes multiplication. Sharing ${f*6} into groups of ${f} is asking how many ${f}s fit inside ${f*6}.</p>
+    <p style="font-size:14px;color:var(--green);font-weight:700;margin:0 0 4px">📝 Example</p>
+    <p style="font-size:15px;line-height:1.55;margin:0">${f*7} ÷ ${f}: think "${f} × 7 = ${f*7}", so the answer is 7.</p>`;
+}
+
 function trickFor(t){
   const m={
     2:"Doubling! Just add the number to itself. 2×7 = 7+7 = 14.",
