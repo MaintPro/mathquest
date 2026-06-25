@@ -161,6 +161,17 @@ function checkStickers(k){
   return newOnes; // array of newly unlocked stickers (usually 0 or 1)
 }
 
+/* ---- Coins & shop ---- */
+function award(k, correct){
+  // called per correct answer: 1 star + 1 coin
+  if(correct){ k.stars++; k.coins=(k.coins||0)+1; }
+}
+const SHOP_AVATARS = ["🐵","🐰","🐺","🦝","🐹","🐱","🐮","🐷","🐗","🦔","🐭","🐔","🦇","🦅","🦈","🐊"];
+const SHOP = [
+  ...SHOP_AVATARS.map(a=>({type:"avatar",emoji:a,cost:15,label:"Avatar "+a}))
+];
+function ownsAvatar(k,a){ return (k.avatarsOwned||[]).includes(a); }
+
 let _memFallback = false;
 const PARENT_CODE = "246810";  // 6-digit code to enter the Parent area
 let DB = load();
@@ -186,12 +197,49 @@ function newKid(name, avatar, pin){
     range:{min:1,max:12},
     speedSec:5,
     stars:0,
+    coins:0,                     // earned per correct answer; spent in shop
     stickers:[],
-    levelsUnlocked:["tables"],   // which path levels are open
-    lastWarmup:null,             // date string of last completed warm-up
-    history:[],                  // {date, mode, topic, score, total, timeSec}
-    facts:{}                     // "aOPb" -> {seen, wrong}  (OP is x or ÷)
+    avatarsOwned:[avatar],       // avatars unlocked (starts with their chosen one)
+    levelsUnlocked:["tables"],
+    stageProgress:{},            // levelId -> index of highest CLEARED stage (-1 = none)
+    lessonsSeen:{},              // "levelId:stageIdx" -> true
+    belts:{},                    // levelId -> belt index reached
+    streak:0,                    // consecutive days
+    lastWarmup:null,
+    history:[],
+    facts:{}
   };
+}
+
+/* ---- Belts ---- */
+const BELTS = ["White","Yellow","Orange","Green","Blue","Purple","Brown","Black"];
+const BELT_COLORS = ["#e8e8e8","#ffd93d","#ff9a3d","#4caf50","#2196f3","#9c27b0","#795548","#222"];
+
+/* ---- Stages per level ----
+   Each stage focuses on one factor/divisor; final stage is mixed mastery. */
+function stagesFor(levelId){
+  if(levelId==="tables"){
+    return [
+      {f:2,name:"The 2s"},{f:10,name:"The 10s"},{f:5,name:"The 5s"},{f:3,name:"The 3s"},
+      {f:4,name:"The 4s"},{f:11,name:"The 11s"},{f:6,name:"The 6s"},{f:7,name:"The 7s"},
+      {f:8,name:"The 8s"},{f:9,name:"The 9s"},{f:12,name:"The 12s"},{f:0,name:"Mixed Mastery",mixed:true}
+    ];
+  }
+  if(levelId==="division"){
+    return [
+      {f:2,name:"÷2"},{f:10,name:"÷10"},{f:5,name:"÷5"},{f:3,name:"÷3"},
+      {f:4,name:"÷4"},{f:11,name:"÷11"},{f:6,name:"÷6"},{f:7,name:"÷7"},
+      {f:8,name:"÷8"},{f:9,name:"÷9"},{f:12,name:"÷12"},{f:0,name:"Mixed Mastery",mixed:true}
+    ];
+  }
+  return [];
+}
+function clearedStage(k,levelId){ return (k.stageProgress&&k.stageProgress[levelId]!=null)?k.stageProgress[levelId]:-1; }
+function beltFor(k,levelId){
+  const stages=stagesFor(levelId); if(!stages.length) return 0;
+  const cleared=clearedStage(k,levelId)+1; // count cleared
+  // map cleared count (0..stages.length) onto belt index (0..7)
+  return Math.min(BELTS.length-1, Math.round((cleared/stages.length)*(BELTS.length-1)));
 }
 
 /* ---- Learning path ---- */
@@ -326,20 +374,26 @@ function screenPath(){
       : done ? `<span class="lock" style="color:var(--green)">✓ mastered</span>`
       : `<span class="lock" style="color:var(--cyan2)">open</span>`;
     const click = (unlocked && !lv.soon) ? `onclick="openLevel('${lv.id}')"` : `onclick="toast('${soon?'Coming soon!':'Master the level before this one first 🔒'}')"`;
+    const beltBadge = (unlocked && !lv.soon && stagesFor(lv.id).length)
+      ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${BELTS[beltFor(k,lv.id)]} belt · ${clearedStage(k,lv.id)+1}/${stagesFor(lv.id).length} stages</div>` : '';
     return `<button class="modecard" ${click} style="${unlocked&&!lv.soon?'':'opacity:.55'}">
       <span class="ico">${lv.icon}</span>
-      <span><span class="t">${lv.name}</span><span class="d">${lv.desc}</span></span>
+      <span><span class="t">${lv.name}</span><span class="d">${lv.desc}</span>${beltBadge}</span>
       ${status}</button>`;
   }).join("");
+  const streakBadge = (k.streak||0)>1 ? `<span class="pill" style="color:#ff8a3d">🔥 ${k.streak}</span>` : '';
   app.innerHTML=`
     <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button>
       <h2>${k.avatar} ${esc(k.name)}</h2><div class="spacer"></div>
-      <span class="pill">⭐ ${k.stars}</span></div>
+      ${streakBadge}<span class="pill">🪙 ${k.coins||0}</span></div>
     <div class="card" style="padding:14px 18px">
       <h3 style="margin-bottom:2px">Your learning path</h3>
-      <p class="muted" style="font-size:13px;margin:4px 0 0">Master each level to unlock the next.</p>
+      <p class="muted" style="font-size:13px;margin:4px 0 0">Climb the stages, earn belts, master each level.</p>
     </div>
     ${cards}
+    <button class="modecard" onclick="screenShop()">
+      <span class="ico">🛍️</span><span><span class="t">Coin shop</span>
+      <span class="d">Spend coins on new avatars. You have ${k.coins||0} 🪙.</span></span></button>
     <button class="modecard" onclick="screenStickers()">
       <span class="ico">🏆</span><span><span class="t">My stickers</span>
       <span class="d">${(k.stickers||[]).length} of ${STICKERS.length} collected.</span></span></button>
@@ -355,39 +409,196 @@ function screenPath(){
 /* back-compat: route to active level menu, else path home */
 function screenModes(){ if(session.level) screenLevel(); else screenPath(); }
 
-/* ---- Level menu (per level) ---- */
+/* ---- Level menu: STAGE LADDER ---- */
 function openLevel(id){
   session.level = levelById(id);
   screenLevel();
 }
 function screenLevel(){
-  const k=session.kid, lv=session.level, op=lv.op;
-  const canAdvance = !!nextLevel(lv.id) && !nextLevel(lv.id).soon;
+  const k=session.kid, lv=session.level;
+  const stages=stagesFor(lv.id);
+  const cleared=clearedStage(k,lv.id); // highest cleared index
+  const beltIdx=beltFor(k,lv.id);
+  const beltName=BELTS[beltIdx], beltCol=BELT_COLORS[beltIdx];
+
+  const stageBtns=stages.map((s,i)=>{
+    const isCleared = i<=cleared;
+    const isCurrent = i===cleared+1;
+    const locked = i>cleared+1;
+    const statusIcon = isCleared?'✅':isCurrent?'▶️':'🔒';
+    const bg = isCleared?'linear-gradient(180deg,#173a2e,#102a22)'
+              : isCurrent?'linear-gradient(180deg,var(--card),var(--bg2))'
+              : 'var(--bg2)';
+    const click = locked?`onclick="toast('Clear the stage before this one first 🔒')"`:`onclick="openStage(${i})"`;
+    return `<button class="modecard" ${click} style="background:${bg};${locked?'opacity:.5':''};${isCurrent?'border-color:var(--gold)':''}">
+      <span class="ico">${statusIcon}</span>
+      <span><span class="t">${s.name}</span>
+      <span class="d">${isCleared?'Cleared':isCurrent?'Your next stage — tap to learn & test':'Locked'}</span></span></button>`;
+  }).join("");
+
   app.innerHTML=`
     <div class="topbar"><button class="back" onclick="screenPath()">‹</button>
       <h2>${lv.icon} ${lv.name}</h2><div class="spacer"></div>
-      <span class="pill">⭐ ${k.stars}</span></div>
+      <span class="pill">🪙 ${k.coins||0}</span></div>
 
+    <div class="card" style="display:flex;align-items:center;gap:14px;padding:14px 18px">
+      <div style="width:48px;height:34px;border-radius:6px;background:${beltCol};border:2px solid #0006;flex:none"></div>
+      <div><div style="font-weight:800;font-size:17px">${beltName} Belt</div>
+      <div class="muted" style="font-size:13px">${cleared+1} of ${stages.length} stages cleared</div></div>
+    </div>
+
+    <div class="card" style="padding:12px 18px">
+      <h3 style="margin-bottom:2px">Stages</h3>
+      <p class="muted" style="font-size:13px;margin:4px 0 0">Each stage: a quick lesson, then a test. Clear it to unlock the next and climb the belts.</p>
+    </div>
+    ${stageBtns}
+
+    <div class="card" style="padding:12px 18px"><h3 style="margin:0">Free play</h3></div>
     <button class="modecard" onclick="screenExplore()">
       <span class="ico">🔍</span><span><span class="t">Explore</span>
-      <span class="d">See how it works — the fun way to learn.</span></span></button>
-
-    <button class="modecard" onclick="startQuiz('practice')">
-      <span class="ico">${lv.icon}</span><span><span class="t">Practice</span>
-      <span class="d">No timer. 10 questions at your pace.</span></span></button>
-
+      <span class="d">Roam the patterns and tricks.</span></span></button>
     <button class="modecard" onclick="startPop()">
       <span class="ico">🎈</span><span><span class="t">Pop the answer</span>
-      <span class="d">Tap the right bubble before it floats away!</span></span></button>
-
+      <span class="d">Arcade game — all facts mixed.</span></span></button>
     <button class="modecard" onclick="startQuiz('speed')">
       <span class="ico">⚡</span><span><span class="t">Speed drill</span>
       <span class="d">${k.speedSec||5}s per question.</span></span></button>
-
-    <button class="modecard" onclick="startMastery()" style="border-color:var(--gold)">
-      <span class="ico">🎓</span><span><span class="t">Mastery check</span>
-      <span class="d">${canAdvance?`Get 10/10 to unlock ${nextLevel(lv.id).name}!`:'Prove you have got it: 10/10.'}</span></span></button>
   `;
+}
+
+/* ---- STAGE FLOW: lesson -> test -> advance ---- */
+function openStage(i){
+  const k=session.kid, lv=session.level;
+  session.stage={lv, idx:i, def:stagesFor(lv.id)[i]};
+  // show lesson first (always available; the "on the spot" teaching)
+  stageLesson();
+}
+function stageLesson(){
+  const k=session.kid, lv=session.level, st=session.stage, s=st.def;
+  let body;
+  if(s.mixed){
+    body=`<p style="font-size:15px;line-height:1.6">This is the big one — <b>all of them mixed together</b>. No single pattern to lean on; you just need to know your ${lv.name.toLowerCase()}. Take your time, and use the tricks you've learned for each one.</p>`;
+  } else if(lv.op==="x"){
+    body=`<p style="font-size:15px;line-height:1.6">${trickFor(s.f)||('Count up in '+s.f+'s: '+[1,2,3,4,5].map(n=>s.f*n).join(", ")+'…')}</p>
+      <div class="seg" style="margin-top:12px">${[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>`<span class="chip" style="font-size:14px">${s.f}×${n}=${s.f*n}</span>`).join("")}</div>`;
+  } else {
+    body=`<p style="font-size:15px;line-height:1.6">Dividing by ${s.f} is the reverse of the ${s.f}× table. To find ${s.f*6} ÷ ${s.f}, ask "${s.f} times what makes ${s.f*6}?" → 6.</p>
+      <div class="seg" style="margin-top:12px">${[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>`<span class="chip" style="font-size:14px">${s.f*n}÷${s.f}=${n}</span>`).join("")}</div>`;
+  }
+  k.lessonsSeen[lv.id+":"+st.idx]=true; save();
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenLevel()">‹</button><h2>${s.name}</h2></div>
+    <div class="card">
+      <h3>📖 Quick lesson</h3>
+      ${body}
+    </div>
+    <div class="card center">
+      <p class="muted" style="margin-top:0">Ready? The test is 10 questions. Get them all right to clear the stage — slip-ups just get retried.</p>
+      <button class="btn gold" onclick="startStageTest()">Start the test</button>
+      <div style="height:8px"></div>
+      <button class="btn ghost" onclick="practiceStage()">Practise first (no pressure)</button>
+    </div>`;
+}
+function practiceStage(){
+  const k=session.kid, lv=session.level, st=session.stage, s=st.def;
+  session.q={mode:'practice', op:lv.op, correct:0, total:10, answered:0, start:Date.now(), beaten:0,
+             fixed:s.mixed?null:s.f, fromStage:true};
+  nextQuestion();
+}
+function startStageTest(){
+  const k=session.kid, lv=session.level, st=session.stage, s=st.def;
+  session.stest={lv, stage:st, attempt:1, maxAttempts:3, queue:null, missed:[], correct:0, total:10};
+  stageTestBuild(true);
+}
+function stageTestBuild(fresh){
+  const k=session.kid, t=session.stest, s=t.stage.def, lv=t.lv;
+  if(fresh){
+    t.queue=[];
+    for(let i=0;i<10;i++){ session.q={op:lv.op, fixed:s.mixed?null:s.f}; t.queue.push(genQ(k)); }
+    session.q=null;
+  } else { t.queue=t.missed.slice(); }
+  t.idx=0; t.correct=0; t.total=t.queue.length; t.missed=[]; t.locked=false;
+  stageTestNext();
+}
+function stageTestNext(){
+  const t=session.stest;
+  if(t.idx>=t.queue.length) return stageTestEnd();
+  t.current=t.queue[t.idx];
+  const c=t.current;
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="screenLevel()">✕</button>
+      <span class="pill" style="color:var(--gold)">📝 ${t.stage.def.name}</span>
+      <span class="pill">${t.idx+1} / ${t.queue.length}</span></div>
+    <div class="progress"><div style="width:${(t.idx/t.queue.length)*100}%"></div></div>
+    <div class="question">${c.prompt}</div>
+    <div class="opts">${c.choices.map(n=>`<button class="opt" onclick="stageTestAns(this,${n})">${n}</button>`).join("")}</div>
+    <div class="feedback" id="fb"></div>`;
+}
+function stageTestAns(el,val){
+  const k=session.kid, t=session.stest, c=t.current;
+  if(t.locked) return; t.locked=true;
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+  const fb=$("fb");
+  const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
+  if(val===c.ans){ el.classList.add("good"); fb.textContent="Correct!"; fb.className="feedback good"; t.correct++; award(k,true); }
+  else { el.classList.add("bad"); f.wrong++; t.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
+  t.idx++; save();
+  setTimeout(()=>{ t.locked=false; stageTestNext(); }, val===c.ans?550:1150);
+}
+function stageTestEnd(){
+  const k=session.kid, t=session.stest, lv=t.lv, st=t.stage;
+  const passed = t.missed.length===0;
+  if(passed){
+    // clear this stage if it's the next uncleared
+    const prev=clearedStage(k,lv.id);
+    let beltUp=false, levelDone=false, newBelt="";
+    if(st.idx===prev+1){
+      k.stageProgress[lv.id]=st.idx;
+      const before=beltFor(k,lv.id);
+      // recompute belt
+      const after=beltFor(k,lv.id);
+      // (belt already reflects new progress)
+      newBelt=BELTS[beltFor(k,lv.id)];
+      // if this was the final (mixed) stage, unlock next level
+      const stages=stagesFor(lv.id);
+      if(st.idx===stages.length-1){
+        levelDone=true;
+        const nxt=nextLevel(lv.id);
+        if(nxt && !nxt.soon && !isUnlocked(k,nxt.id)) k.levelsUnlocked.push(nxt.id);
+      }
+    }
+    k.history.push({date:Date.now(), mode:'stage', topic:lv.name+" "+st.def.name, score:10, total:10, timeSec:0});
+    const unlocked=checkStickers(k); save();
+    const stages=stagesFor(lv.id);
+    const nextStage = stages[st.idx+1];
+    app.innerHTML=`
+      <div class="card center" style="border-color:var(--green)">
+        <div style="font-size:48px">🎉</div>
+        <h2>${st.def.name} cleared!</h2>
+        <div class="big">10/10</div>
+        <p class="muted">+10 ⭐ &nbsp; +10 🪙 &nbsp;·&nbsp; ${BELTS[beltFor(k,lv.id)]} Belt</p>
+      </div>
+      ${levelDone?`<div class="card center" style="border-color:var(--gold)"><div style="font-size:40px">${lv.icon}🏆</div><h3>${lv.name} fully mastered!</h3>${nextLevel(lv.id)&&!nextLevel(lv.id).soon?`<p class="muted">${nextLevel(lv.id).name} is now unlocked.</p>`:''}</div>`:''}
+      <div class="card center">
+        ${nextStage?`<button class="btn gold" onclick="openStage(${st.idx+1})">Next: ${nextStage.name} →</button><div style="height:8px"></div>`:''}
+        <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
+      </div>`;
+    return;
+  }
+  // not passed
+  save();
+  const canRetry=t.attempt<t.maxAttempts;
+  app.innerHTML=`
+    <div class="card center">
+      <div style="font-size:46px">${canRetry?'🔁':'💪'}</div>
+      <h2>${t.correct}/10</h2>
+      <p class="muted">${canRetry?`Nearly! Let's redo just the ${t.missed.length} you missed.`:`Good try! Have another lesson and practise, then test again.`}</p>
+      ${canRetry
+        ? `<button class="btn gold" onclick="session.stest.attempt++;stageTestBuild(false)">Retry missed ones</button>`
+        : `<button class="btn gold" onclick="stageLesson()">Review the lesson</button>`}
+      <div style="height:8px"></div>
+      <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
+    </div>`;
 }
 
 /* ---- Daily warm-up ---- */
@@ -440,13 +651,19 @@ function warmAns(el,val){
   if(w.locked) return; w.locked=true;
   document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
   const fb=$("fb");
-  if(val===c.ans){ el.classList.add("good"); fb.textContent="Yes!"; fb.className="feedback good"; w.correct++; k.stars++; }
+  if(val===c.ans){ el.classList.add("good"); fb.textContent="Yes!"; fb.className="feedback good"; w.correct++; award(k,true); }
   else { el.classList.add("bad"); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
   w.idx++;
   setTimeout(()=>{ w.locked=false; warmNext(); }, val===c.ans?600:1200);
 }
 function warmEnd(){
   const k=session.kid, w=session.warm;
+  // update streak: consecutive days. yesterday -> +1, gap -> reset to 1
+  const prev=k.lastWarmup;
+  const y=new Date(); y.setDate(y.getDate()-1);
+  const yStr=y.getFullYear()+"-"+(y.getMonth()+1)+"-"+y.getDate();
+  if(prev===yStr) k.streak=(k.streak||0)+1;
+  else if(prev!==todayStr()) k.streak=1;
   k.lastWarmup=todayStr();
   checkStickers(k); save();
   // auto-suggest the next best thing
@@ -456,7 +673,7 @@ function warmEnd(){
       <div style="font-size:48px">${w.correct>=4?'🌟':'💪'}</div>
       <h2>Warm-up done!</h2>
       <div class="big">${w.correct}/${w.total}</div>
-      <p class="muted">${w.correct>=4?'Sharp as ever — ready for today.':'Good shake-out. A little practice will help.'}</p>
+      <p class="muted">🔥 ${k.streak||1}-day streak &nbsp;·&nbsp; ${w.correct>=4?'Sharp as ever!':'Good shake-out.'}</p>
     </div>
     <div class="card">
       <h3>Suggested for today</h3>
@@ -466,17 +683,20 @@ function warmEnd(){
     <button class="btn ghost" onclick="screenPath()">Choose myself</button>`;
 }
 function suggestNext(k){
-  // open the highest unlocked, not-yet-mastered level; if warm-up shaky, suggest practice
+  // point to the next uncleared stage in the highest unlocked level
   const unlocked=(k.levelsUnlocked||["tables"]).map(levelById).filter(l=>l&&!l.soon);
   const current=unlocked[unlocked.length-1];
-  const canAdvance = nextLevel(current.id) && !nextLevel(current.id).soon;
-  if(session.warm && session.warm.correct<4){
-    return {label:`Practise ${current.name}`, why:`Let's warm those ${current.name.toLowerCase()} up with some practice.`, action:`openLevel('${current.id}');setTimeout(()=>startQuiz('practice'),50)`};
+  const stages=stagesFor(current.id);
+  const nextIdx=clearedStage(k,current.id)+1;
+  if(nextIdx<stages.length){
+    const st=stages[nextIdx];
+    if(session.warm && session.warm.correct<4){
+      return {label:`Practise ${current.name}`, why:`Warm up with a little ${current.name.toLowerCase()} practice first.`, action:`openLevel('${current.id}');setTimeout(()=>{session.stage={lv:session.level,idx:${nextIdx},def:stagesFor('${current.id}')[${nextIdx}]};practiceStage();},60)`};
+    }
+    return {label:`Continue: ${st.name}`, why:`You're flying! Your next stage is ${st.name} — learn it and clear the test.`, action:`openLevel('${current.id}');setTimeout(()=>openStage(${nextIdx}),60)`};
   }
-  if(canAdvance){
-    return {label:`Try the ${current.name} mastery check`, why:`You're flying! Pass 10/10 to unlock ${nextLevel(current.id).name}.`, action:`openLevel('${current.id}');setTimeout(startMastery,50)`};
-  }
-  return {label:`Practise ${current.name}`, why:`Keep ${current.name} sharp.`, action:`openLevel('${current.id}');setTimeout(()=>startQuiz('practice'),50)`};
+  // level complete
+  return {label:`Open ${current.name}`, why:`Keep ${current.name} sharp, or explore the next level.`, action:`openLevel('${current.id}')`};
 }
 
 /* ---- Mastery check: 10/10, 3 attempts, retry only missed ---- */
@@ -517,7 +737,7 @@ function masteryAns(el,val){
   document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
   const fb=$("fb");
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
-  if(val===c.ans){ el.classList.add("good"); fb.textContent="Correct!"; fb.className="feedback good"; m.correct++; k.stars++; }
+  if(val===c.ans){ el.classList.add("good"); fb.textContent="Correct!"; fb.className="feedback good"; m.correct++; award(k,true); }
   else { el.classList.add("bad"); f.wrong++; m.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
   m.idx++; save();
   setTimeout(()=>{ m.locked=false; masteryNext(); }, val===c.ans?600:1200);
@@ -727,7 +947,7 @@ function answer(el, val){
     if(q.mode==='speed' && elapsed<=q.speedSec){ q.beaten++; fb.textContent="⚡ "+elapsed.toFixed(1)+"s — beat it!"; }
     else fb.textContent=pick(["Nice!","Correct!","Boom!","Spot on!","Yes!"]);
     fb.className="feedback good";
-    q.correct++; k.stars++;
+    q.correct++; award(k,true);
   } else {
     el.classList.add("bad"); f.wrong++;
     document.querySelectorAll('.opt').forEach(b=>{ if(+b.textContent===c.ans) b.classList.add("good"); });
@@ -785,7 +1005,7 @@ function screenReport(){
   const acc=totQ?Math.round(totC/totQ*100):0;
   const tricky=Object.entries(k.facts).filter(([_,f])=>f.wrong>0)
     .sort((a,b)=>b[1].wrong-a[1].wrong).slice(0,6)
-    .map(([key,f])=>{const[a,b]=key.split("x");return `<span class="chip">${a}×${b} <span class="muted">(${f.wrong}✗)</span></span>`;}).join("") || `<span class="muted">None yet — great job!</span>`;
+    .map(([key,f])=>{const disp=key.replace("x"," × ").replace("÷"," ÷ ");return `<span class="chip">${disp} <span class="muted">(${f.wrong}✗)</span></span>`;}).join("") || `<span class="muted">None yet — great job!</span>`;
   const recent=h.slice(-8).reverse().map(x=>{
     const d=new Date(x.date); const dd=d.getDate()+"/"+(d.getMonth()+1);
     return `<div class="statline"><span>${dd} · ${x.mode==='timed'?'⏱️ Timed':x.mode==='speed'?'⚡ Speed '+(x.goal||'')+'s':x.mode==='pop'?'🎈 Pop':'✖️ Practice'}</span><b>${x.score}/${x.total}</b></div>`;
@@ -808,6 +1028,37 @@ function screenReport(){
       <div style="margin-top:6px">${recent}</div>
     </div>`;
 }
+
+/* ---- Coin shop ---- */
+function screenShop(){
+  const k=session.kid;
+  const cells=SHOP_AVATARS.map(a=>{
+    const owned=ownsAvatar(k,a);
+    const active=k.avatar===a;
+    return `<div style="text-align:center">
+      <div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:34px;border-radius:14px;
+        border:2px solid ${active?'var(--gold)':'var(--line)'};background:${owned?'linear-gradient(180deg,#173a2e,#102a22)':'var(--bg2)'}">${a}</div>
+      ${owned
+        ? (active?`<div style="font-size:12px;color:var(--gold);margin-top:4px">Wearing</div>`
+                : `<button class="chip" style="margin-top:4px" onclick="wearAvatar('${a}')">Wear</button>`)
+        : `<button class="chip" style="margin-top:4px" onclick="buyAvatar('${a}')">🪙 15</button>`}
+    </div>`;
+  }).join("");
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenPath()">‹</button><h2>🛍️ Coin shop</h2>
+      <div class="spacer"></div><span class="pill">🪙 ${k.coins||0}</span></div>
+    <div class="card">
+      <p class="muted center" style="margin-top:0">Earn coins by answering correctly. Spend them on new avatars!</p>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">${cells}</div>
+    </div>`;
+}
+function buyAvatar(a){
+  const k=session.kid;
+  if((k.coins||0)<15) return toast("Need 15 🪙 — keep practising!");
+  k.coins-=15; k.avatarsOwned=k.avatarsOwned||[]; k.avatarsOwned.push(a);
+  k.avatar=a; save(); toast("Unlocked "+a+"!"); screenShop();
+}
+function wearAvatar(a){ const k=session.kid; k.avatar=a; save(); screenShop(); }
 
 /* ---- Sticker collection ---- */
 function screenStickers(){
@@ -995,7 +1246,7 @@ function popHit(val, missed){
   document.querySelectorAll('.bubble').forEach(b=>{b.style.animationPlayState='paused'; b.disabled=true;});
   const fb=$("fb");
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
-  if(val===c.ans){ p.score++; k.stars++; fb.textContent=pick(["Pop! 🎉","Got it!","Nice shot!","Boom!"]); fb.className="feedback good"; }
+  if(val===c.ans){ p.score++; award(k,true); fb.textContent=pick(["Pop! 🎉","Got it!","Nice shot!","Boom!"]); fb.className="feedback good"; }
   else { f.wrong++; fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
   p.answered++;
   const unlocked=checkStickers(k); save();
