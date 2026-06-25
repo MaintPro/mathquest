@@ -1289,7 +1289,11 @@ function renderDivLesson(f){
     <p style="font-size:14px;color:var(--cyan2);font-weight:700;margin:0 0 4px">🤔 Why it works</p>
     <p style="font-size:15px;line-height:1.55;margin:0 0 12px">Division undoes multiplication. Sharing ${f*6} into groups of ${f} is asking how many ${f}s fit inside ${f*6}.</p>
     <p style="font-size:14px;color:var(--green);font-weight:700;margin:0 0 4px">📝 Example</p>
-    <p style="font-size:15px;line-height:1.55;margin:0">${f*7} ÷ ${f}: think "${f} × 7 = ${f*7}", so the answer is 7.</p>`;
+    <p style="font-size:15px;line-height:1.55;margin:0 0 12px">${f*7} ÷ ${f}: think "${f} × 7 = ${f*7}", so the answer is 7.</p>
+    <div style="background:#10243c;border:1px solid var(--cyan);border-radius:12px;padding:12px;margin-top:4px">
+      <p style="font-size:13px;color:var(--cyan2);font-weight:700;margin:0 0 4px">🌉 Looking ahead: fractions</p>
+      <p style="font-size:14px;line-height:1.5;margin:0">A fraction is just a division waiting to happen. <b>1 ÷ ${f} = 1/${f}</b> — one whole shared into ${f} equal parts. When you reach Fractions, you'll already understand the idea!</p>
+    </div>`;
 }
 
 function trickFor(t){
@@ -1468,9 +1472,10 @@ function parentKey(n){
 
 function screenManage(){
   const list=DB.kids.map(k=>`
-    <div class="statline">
-      <span>${k.avatar} ${esc(k.name)} <span class="muted">· ⭐${k.stars}</span></span>
+    <div class="statline" style="flex-wrap:wrap;gap:6px">
+      <span>${k.avatar} ${esc(k.name)} <span class="muted">· ⭐${k.stars} · 🪙${k.coins||0}</span></span>
       <span><button class="chip" onclick="togglePin('${k.id}',this)" data-pin="${k.pin}">Show PIN</button>
+      <button class="chip" onclick="resetKid('${k.id}')">Reset</button>
       <button class="chip" onclick="delKid('${k.id}')">Remove</button></span>
     </div>`).join("");
   app.innerHTML=`
@@ -1478,6 +1483,11 @@ function screenManage(){
     <div class="card">
       <h3>Players</h3>
       <div style="margin-top:8px">${list||'<p class="muted">No players yet.</p>'}</div>
+    </div>
+    <div class="card">
+      <h3>Reset</h3>
+      <p class="muted" style="font-size:14px;line-height:1.5;margin:6px 0 10px">"Reset" clears a child's stars, coins, belts and stage progress but keeps their name and PIN. "Remove" deletes the player entirely.</p>
+      <button class="btn ghost sm" onclick="resetAll()" style="color:var(--red)">Reset ALL players' progress</button>
     </div>
     <div class="card">
       <h3>About</h3>
@@ -1488,8 +1498,24 @@ function togglePin(id,btn){
   if(btn.textContent==="Show PIN"){ btn.textContent="PIN "+btn.dataset.pin; }
   else { btn.textContent="Show PIN"; }
 }
+function resetKidData(k){
+  k.stars=0; k.coins=0; k.stickers=[]; k.shopStickers=[];
+  k.avatarsOwned=[k.avatar]; k.levelsUnlocked=["tables"];
+  k.stageProgress={}; k.lessonsSeen={}; k.belts={};
+  k.streak=0; k.lastWarmup=null; k.history=[]; k.facts={};
+}
+function resetKid(id){
+  const k=DB.kids.find(x=>x.id===id); if(!k) return;
+  if(!confirm("Reset "+k.name+"'s progress? Stars, coins, belts and stages will be cleared. Name and PIN stay.")) return;
+  resetKidData(k); save(); toast(k.name+"'s progress reset"); screenManage();
+}
+function resetAll(){
+  if(!confirm("Reset ALL players' progress? This clears everyone's stars, coins and stages. Names and PINs stay. This cannot be undone.")) return;
+  DB.kids.forEach(resetKidData); save(); toast("All progress reset"); screenManage();
+}
 function delKid(id){
-  if(!confirm("Remove this player and all their progress?")) return;
+  const k=DB.kids.find(x=>x.id===id);
+  if(!confirm("Remove "+(k?k.name:"this player")+" and ALL their data permanently?")) return;
   DB.kids=DB.kids.filter(k=>k.id!==id); save(); screenManage();
 }
 
