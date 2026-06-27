@@ -378,6 +378,9 @@ function stagesFor(levelId){
   if(levelId==="fracops"){
     return FRACOP_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
   }
+  if(levelId==="decimals"){
+    return DECIMAL_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
+  }
   return [];
 }
 function clearedStage(k,levelId){ return (k.stageProgress&&k.stageProgress[levelId]!=null)?k.stageProgress[levelId]:-1; }
@@ -393,7 +396,8 @@ const PATH = [
   {id:"tables",   name:"Times Tables", icon:"✖️", op:"x", desc:"Multiplication facts"},
   {id:"division", name:"Division",     icon:"➗", op:"÷", desc:"Sharing and grouping"},
   {id:"fractions",name:"Fractions",    icon:"🍕", op:"f", desc:"Parts of a whole"},
-  {id:"fracops",  name:"Fraction Operations", icon:"🧮", op:"fo", desc:"Add, subtract, multiply, divide"}
+  {id:"fracops",  name:"Fraction Operations", icon:"🧮", op:"fo", desc:"Add, subtract, multiply, divide"},
+  {id:"decimals", name:"Decimals & %", icon:"💯", op:"dp", desc:"Decimals, percentages & word problems"}
 ];
 function levelById(id){ return PATH.find(l=>l.id===id); }
 function nextLevel(id){ const i=PATH.findIndex(l=>l.id===id); return PATH[i+1]||null; }
@@ -449,6 +453,22 @@ const FRACOP_STAGES = [
   {id:"mul",       name:"Multiply",               kind:"mul",       desc:"2/3 × 1/4"},
   {id:"div",       name:"Divide",                 kind:"div",       desc:"1/2 ÷ 1/4"},
   {id:"op_mixed",  name:"Operations Master",      kind:"op_any",    desc:"All four mixed", mixed:true}
+];
+
+const DECIMAL_STAGES = [
+  // Chapter 1 — Decimals
+  {id:"dec_read",   name:"Read a Decimal",        kind:"dec_read",   desc:"Tenths on a grid"},
+  {id:"dec_frac",   name:"Decimal = Fraction",    kind:"dec_frac",   desc:"0.5 = 1/2"},
+  {id:"dec_compare",name:"Bigger Decimal",        kind:"dec_compare",desc:"0.7 vs 0.65"},
+  // Chapter 2 — Percentages
+  {id:"pct_read",   name:"What Percent?",         kind:"pct_read",   desc:"Shaded out of 100"},
+  {id:"pct_frac",   name:"Percent = Fraction",    kind:"pct_frac",   desc:"50% = 1/2"},
+  {id:"pct_of",     name:"Percent of a Number",   kind:"pct_of",     desc:"50% of 20"},
+  // Chapter 3 — Connecting
+  {id:"convert",    name:"Fraction-Decimal-%",    kind:"convert",    desc:"Switch between all three"},
+  // Final — Word problems then master
+  {id:"word",       name:"Word Problems",         kind:"word",       desc:"Real-life maths"},
+  {id:"dp_mixed",   name:"Decimal & % Master",    kind:"dp_any",     desc:"All mixed", mixed:true}
 ];
 
 let session = {}; // active kid + quiz state
@@ -686,7 +706,7 @@ function openStage(i){
 }
 function stageLesson(){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
-  if(lv.id==="fractions"||lv.id==="fracops") return fracLesson();
+  if(lv.id==="fractions"||lv.id==="fracops"||lv.id==="decimals") return fracLesson();
   let body;
   if(s.mixed){
     body=`<p style="font-size:15px;line-height:1.6">This is the big one — <b>all of them mixed together</b>. No single pattern to lean on; you just need to know your ${lv.name.toLowerCase()}. Take your time, and use the tricks you've learned for each one.</p>
@@ -770,6 +790,43 @@ function fracLessonContent(kind){
       <p style="font-size:16px;text-align:center;margin:12px 0">⅓ of 12 → 12 ÷ 3 = 4 → 4 × 1 = <b>4</b></p>
       <p style="font-size:15px;line-height:1.55;margin:0">⅔ of 12 → 12 ÷ 3 = 4 → 4 × 2 = <b>8</b>.</p>`;
   }
+  if(kind==="dec_read"){
+    return `<p style="font-size:15px;line-height:1.6">A <b>decimal</b> is another way to show parts of a whole. The first digit after the dot is <b>tenths</b>. This bar has 10 parts.</p>
+      <div class="center" style="margin:14px 0">${tenthsSVG(4)}</div>
+      <p style="font-size:15px;text-align:center;margin:0">4 out of 10 shaded = <b>0.4</b> (four tenths)</p>`;
+  }
+  if(kind==="dec_frac"){
+    return `<p style="font-size:15px;line-height:1.6">Decimals and fractions are the same value in different clothes.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">0.5 = <span class="fracBig"><span>5</span><span class="b">10</span></span> = <span class="fracBig"><span>1</span><span class="b">2</span></span> &nbsp;·&nbsp; 0.25 = <span class="fracBig"><span>1</span><span class="b">4</span></span></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Tip: 0.5 is a half, 0.25 is a quarter, 0.1 is a tenth.</p>`;
+  }
+  if(kind==="dec_compare"){
+    return `<p style="font-size:15px;line-height:1.6">To compare decimals, line up the dots and compare digit by digit, left to right.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">0.7 vs 0.65 → 0.70 vs 0.65 → <b>0.7 is bigger</b></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Tip: 0.7 is the same as 0.70. The tenths decide first.</p>`;
+  }
+  if(kind==="pct_read"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Percent</b> means "out of 100". This grid has 100 squares.</p>
+      <div class="center" style="margin:14px 0">${hundredGridSVG(30)}</div>
+      <p style="font-size:15px;text-align:center;margin:0">30 of 100 shaded = <b>30%</b></p>`;
+  }
+  if(kind==="pct_frac"){
+    return `<p style="font-size:15px;line-height:1.6">A percent is just a fraction out of 100.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">50% = <span class="fracBig"><span>50</span><span class="b">100</span></span> = <span class="fracBig"><span>1</span><span class="b">2</span></span> &nbsp;·&nbsp; 25% = <span class="fracBig"><span>1</span><span class="b">4</span></span></p>`;
+  }
+  if(kind==="pct_of"){
+    return `<p style="font-size:15px;line-height:1.6">To find a percent of a number, turn the percent into a fraction (or decimal) and multiply.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">50% of 20 → half of 20 = <b>10</b><br>25% of 20 → quarter of 20 = <b>5</b></p>`;
+  }
+  if(kind==="convert"){
+    return `<p style="font-size:15px;line-height:1.6">Fractions, decimals and percents are <b>three ways to say the same thing</b>.</p>
+      <p style="font-size:15px;text-align:center;margin:12px 0">½ = 0.5 = 50%<br>¼ = 0.25 = 25%<br>⅕ = 0.2 = 20%</p>
+      <p style="font-size:15px;line-height:1.55;margin:0">To get a percent from a decimal, multiply by 100 (move the dot two places).</p>`;
+  }
+  if(kind==="word"){
+    return `<p style="font-size:15px;line-height:1.6">Word problems hide the maths in a story. Read carefully, find the numbers, and decide: is it a fraction, a percent, or "how many"?</p>
+      <p style="font-size:15px;line-height:1.55;margin:8px 0 0"><b>Example:</b> "Sam ate 3 of 12 slices." → 3/12 = ¼ of the pizza.</p>`;
+  }
   if(kind==="add_same"||kind==="sub_same"){
     const op=kind==="add_same"?"add":"subtract";
     const sym=kind==="add_same"?"+":"−";
@@ -848,8 +905,9 @@ function fracTestAns(yn){
   let gotN, gotD="";
   if(q.yesno||q.compare){ gotN=yn; }
   else {
+    const oneField = q.single || q.accept==="decimal";
     gotN=$("fnum")?$("fnum").value:""; gotD=$("fden")?$("fden").value:"";
-    if(gotN===""||(!q.single && gotD==="")) return toast("Type the fraction first");
+    if(gotN===""||(!oneField && gotD==="")) return toast(q.accept==="decimal"?"Type the decimal first":"Type the fraction first");
   }
   t.locked=true;
   const fb=$("fb");
@@ -918,6 +976,10 @@ function fracSpeedNext(){
   if(fp.idx>=fp.queue.length) return fracSpeedEnd();
   fp.current=fp.queue[fp.idx]; fp.locked=false;
   const q=fp.current;
+  fp.choices=fracChoices(q);  // tappable answers — no typing in the timed round
+  const choiceBtns=fp.choices.map(c=>
+    `<button class="opt" style="min-width:96px" onclick="fracSpeedPick('${c.val}')">${c.label}</button>`
+  ).join("");
   app.innerHTML=`
     <div class="qtop"><button class="back" onclick="exitFracSpeed()">✕</button>
       <span class="pill" style="color:var(--gold)">⚡ ${fp.stage.def.name}</span>
@@ -925,9 +987,8 @@ function fracSpeedNext(){
     <div class="progress"><div style="width:${(fp.idx/fp.queue.length)*100}%"></div></div>
     <div class="center" style="margin:10px 0">${q.visual}</div>
     <p class="center" style="font-size:15px;margin:4px 0 12px">${q.prompt}</p>
-    <div class="center">${fracInputHTML(q,'fracSpeedAns')}</div>
+    <div class="opts" style="justify-content:center;flex-wrap:wrap;gap:10px">${choiceBtns}</div>
     <div class="feedback" id="fb"></div>`;
-  setTimeout(()=>{ const n=$("fnum"); if(n) n.focus(); }, 50);
   fp.left=fp.speedSec;
   const myId=setInterval(()=>{
     if(fp.timer!==myId || fp.locked){ clearInterval(myId); return; }
@@ -942,23 +1003,19 @@ function fracSpeedTimeout(){
   if(fp.locked) return; fp.locked=true;
   if(fp.timer){ clearInterval(fp.timer); fp.timer=null; }
   fp.missed.push(q);
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
   const fb=$("fb"); if(fb){ fb.textContent="Too slow! Answer: "+fracAnswerShown(q); fb.className="feedback bad"; }
   fp.idx++;
   setTimeout(()=>fracSpeedNext(),1200);
 }
-function fracSpeedAns(yn){
+function fracSpeedPick(val){
   const k=session.kid, fp=session.fspeed, q=fp.current;
   if(fp.locked) return;
-  let gotN, gotD="";
-  if(q.yesno||q.compare){ gotN=yn; }
-  else {
-    gotN=$("fnum")?$("fnum").value:""; gotD=$("fden")?$("fden").value:"";
-    if(gotN===""||(!q.single && gotD==="")) return toast("Type the fraction first");
-  }
   fp.locked=true;
   if(fp.timer){ clearInterval(fp.timer); fp.timer=null; }
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
   const fb=$("fb");
-  if(fracCorrect(q, gotN, gotD)){
+  if(fracChoiceCorrect(q, val)){
     const cn=coinsForSpeed(fp.speedSec);
     if(fb){ fb.textContent="⚡ In time! +"+cn+" 🪙"; fb.className="feedback good"; }
     fp.correct++; award(k,true,cn);
@@ -1498,6 +1555,7 @@ function twoBarSVG(n1,d1,n2,d2){
 function genFrac(kind){
   if(kind==="any") kind=pick(["name","shade","build","parts","compare","numline","improper","mixed_num","frac_of","equiv_make","simplify","simplest"]);
   if(kind==="op_any") kind=pick(["add_same","sub_same","add_diff","sub_diff","mul","div"]);
+  if(kind==="dp_any") kind=pick(["dec_read","dec_frac","dec_compare","pct_read","pct_frac","pct_of","convert","word"]);
   // ---- Understanding kinds ----
   if(kind==="name" || kind==="shade" || kind==="build" || kind==="parts"){
     const {num,den}=randFrac();
@@ -1602,9 +1660,112 @@ function genFrac(kind){
   if(kind==="add_same"||kind==="sub_same"||kind==="add_diff"||kind==="sub_diff"||kind==="mul"||kind==="div"){
     return genFracOp(kind);
   }
+  // ---- Decimals & Percentages ----
+  if(kind==="dec_read"||kind==="dec_frac"||kind==="dec_compare"||kind==="pct_read"||kind==="pct_frac"||kind==="pct_of"||kind==="convert"||kind==="word"){
+    return genDecimal(kind);
+  }
   // fallback
   const {num,den}=randFrac();
   return {kind:"name", num, den, visual:fracBarSVG(num,den), prompt:"What fraction is shaded?", answer:{num,den}, accept:"equiv"};
+}
+
+// 10x10 grid with `filled` cells shaded (for percent/decimal visuals)
+function hundredGridSVG(filled){
+  const cell=18, gap=1, n=10, size=n*cell;
+  let cells="";
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++){
+    const idx=r*n+c, on=idx<filled;
+    cells+=`<rect x="${c*cell}" y="${r*cell}" width="${cell-gap}" height="${cell-gap}" fill="${on?'var(--cyan)':'var(--bg2)'}" stroke="var(--ink)" stroke-width="0.5"/>`;
+  }
+  return `<svg viewBox="0 0 ${size} ${size}" width="180" height="180">${cells}</svg>`;
+}
+// tenths bar (10 segments) with `filled` shaded
+function tenthsSVG(filled){ return fracBarSVG(filled,10,300); }
+
+function genDecimal(kind){
+  const decToFrac=(d)=>{ // 0.5 -> {1,2}
+    let num=Math.round(d*100), den=100; const g=gcd(num,den); return {num:num/g,den:den/g};
+  };
+  if(kind==="dec_read"){
+    const t=1+Math.floor(Math.random()*9); // tenths 0.1..0.9
+    return {kind, single:false, isDecimal:true, decVal:t/10,
+      visual: tenthsSVG(t),
+      prompt:"What decimal is shaded? (e.g. 0.4)",
+      answer:{dec:t/10}, accept:"decimal"};
+  }
+  if(kind==="dec_frac"){
+    const opts=[[0.5,"1/2"],[0.25,"1/4"],[0.75,"3/4"],[0.2,"1/5"],[0.1,"1/10"],[0.4,"2/5"],[0.6,"3/5"],[0.8,"4/5"]];
+    const [d,f]=pick(opts); const fr=decToFrac(d);
+    return {kind, single:false,
+      visual:`<div style="font-size:40px;font-weight:800;text-align:center;color:var(--gold2)">${d}</div>`,
+      prompt:`Write ${d} as a fraction.`,
+      answer:{num:fr.num,den:fr.den}, accept:"equiv"};
+  }
+  if(kind==="dec_compare"){
+    let a=(1+Math.floor(Math.random()*98))/100;
+    let b=(1+Math.floor(Math.random()*98))/100;
+    while(Math.abs(a-b)<0.005){ b=(1+Math.floor(Math.random()*98))/100; }
+    a=Math.round(a*100)/100; b=Math.round(b*100)/100;
+    return {kind, compare:true, f1:{label:a}, f2:{label:b},
+      visual:`<div style="font-size:34px;font-weight:800;text-align:center;color:var(--gold2)">A = ${a} &nbsp;&nbsp; B = ${b}</div>`,
+      prompt:"Which is bigger?", answer: a>b?"A":"B", cmpA:a, cmpB:b};
+  }
+  if(kind==="pct_read"){
+    const p=pick([10,20,25,30,40,50,60,70,75,80,90]);
+    return {kind, single:true, isPercent:true,
+      visual: hundredGridSVG(p),
+      prompt:"What percent is shaded?",
+      answer:p};
+  }
+  if(kind==="pct_frac"){
+    const opts=[[50,"1/2"],[25,"1/4"],[75,"3/4"],[20,"1/5"],[10,"1/10"],[40,"2/5"]];
+    const [p,f]=pick(opts); const num=p,den=100; const g=gcd(num,den);
+    return {kind,
+      visual:`<div style="font-size:40px;font-weight:800;text-align:center;color:var(--gold2)">${p}%</div>`,
+      prompt:`Write ${p}% as a fraction.`,
+      answer:{num:num/g,den:den/g}, accept:"equiv"};
+  }
+  if(kind==="pct_of"){
+    const p=pick([10,20,25,50,75]);
+    const base=pick([20,40,60,80,100,12,16,24]);
+    const ans=Math.round(p/100*base);
+    return {kind, single:true,
+      visual:`<div style="font-size:30px;font-weight:800;text-align:center;color:var(--gold2)">${p}% of ${base}</div>`,
+      prompt:`What is ${p}% of ${base}?`,
+      answer:ans};
+  }
+  if(kind==="convert"){
+    const opts=[[0.5,50,"1/2"],[0.25,25,"1/4"],[0.75,75,"3/4"],[0.2,20,"1/5"],[0.1,10,"1/10"]];
+    const [d,p,f]=pick(opts);
+    const ask=pick(["d2p","p2d","f2p"]);
+    if(ask==="d2p") return {kind, single:true, visual:`<div style="font-size:34px;font-weight:800;text-align:center;color:var(--gold2)">${d}</div>`, prompt:`${d} = what percent?`, answer:p};
+    if(ask==="p2d") return {kind, single:false, isDecimal:true, decVal:d, visual:`<div style="font-size:34px;font-weight:800;text-align:center;color:var(--gold2)">${p}%</div>`, prompt:`${p}% = what decimal?`, answer:{dec:d}, accept:"decimal"};
+    const fr=f.split("/").map(Number);
+    return {kind, single:true, visual:`<div style="font-size:34px;font-weight:800;text-align:center;color:var(--gold2)"><span class="fracBig"><span>${fr[0]}</span><span class="b">${fr[1]}</span></span></div>`, prompt:`${f} = what percent?`, answer:p};
+  }
+  // ---- Word problems ----
+  return genWord();
+}
+
+function genWord(){
+  const names=["Sam","Mia","Leo","Ava","Noah","Zara","Kai","Ivy"];
+  const nm=pick(names);
+  const templates=[
+    ()=>{ const total=pick([8,10,12,6]); const ate=1+Math.floor(Math.random()*(total-1));
+      const g=gcd(ate,total);
+      return {prompt:`${nm} had a pizza cut into ${total} slices and ate ${ate}. What fraction did ${nm} eat?`,
+        answer:{num:ate/g,den:total/g}, accept:"equiv", single:false}; },
+    ()=>{ const p=pick([10,20,25,50]); const base=pick([20,40,60,80,100]); const ans=Math.round(p/100*base);
+      return {prompt:`A toy costs $${base}. It's ${p}% off. How many dollars do you save?`, answer:ans, single:true}; },
+    ()=>{ const total=pick([20,25,30,40,50]); const got=Math.round(pick([0.5,0.6,0.8,0.9])*total);
+      const pct=Math.round(got/total*100);
+      return {prompt:`${nm} scored ${got} out of ${total} on a test. What percent is that?`, answer:pct, single:true}; },
+    ()=>{ const den=pick([2,3,4,5]); const whole=den*pick([2,3,4]); const num=1+Math.floor(Math.random()*(den-1));
+      const ans=whole/den*num;
+      return {prompt:`There are ${whole} students. ${num}/${den} of them like maths. How many is that?`, answer:ans, single:true}; }
+  ];
+  const t=pick(templates)();
+  return Object.assign({kind:"word", visual:`<div style="font-size:30px;text-align:center">📖</div>`}, t);
 }
 
 function genFracOp(kind){
@@ -1656,10 +1817,12 @@ function genFracOp(kind){
 }
 // signature of a fraction question, to detect duplicates within one round
 function fracSig(q){
-  if(q.compare) return q.kind+":"+q.f1.num+"/"+q.f1.den+"vs"+q.f2.num+"/"+q.f2.den;
+  if(q.kind==="word") return "word:"+(q.prompt||"");
+  if(q.compare) return q.kind+":"+(q.cmpA!=null?q.cmpA+"vs"+q.cmpB : q.f1.num+"/"+q.f1.den+"vs"+q.f2.num+"/"+q.f2.den);
   if(q.fracOp) return q.kind+":"+q.a.num+"/"+q.a.den+q.sym+q.b.num+"/"+q.b.den;
+  if(q.isDecimal) return q.kind+":"+(q.answer.dec!=null?q.answer.dec:q.decVal)+":"+(q.prompt||"");
   if(q.yesno) return q.kind+":"+q.num+"/"+q.den;
-  if(q.single) return q.kind+":"+q.num+"/"+q.den+":"+(q.prompt||"");
+  if(q.single) return q.kind+":"+(q.answer)+":"+(q.prompt||"");
   return q.kind+":"+q.num+"/"+q.den;
 }
 // build n questions trying hard to avoid repeats; allows repeats only if the pool is exhausted
@@ -1677,6 +1840,11 @@ function genFracSet(kind, n){
 function fracCorrect(q, gotNum, gotDen){
   if(q.compare){ return (""+gotNum).toUpperCase()===q.answer; }
   if(q.yesno){ return (""+gotNum).toLowerCase()===q.answer; }
+  if(q.accept==="decimal"){
+    const v=parseFloat(gotNum);
+    if(isNaN(v)) return false;
+    return Math.abs(v - q.answer.dec) < 0.001;
+  }
   if(q.single){ return parseInt(gotNum)===q.answer; }
   const a=parseInt(gotNum), b=parseInt(gotDen);
   if(isNaN(a)||isNaN(b)||b===0||a<0) return false;
@@ -1717,6 +1885,10 @@ function fracInputHTML(q, ansFn){
       <button class="opt" style="width:120px" onclick="${ansFn}('yes')">Yes</button>
       <button class="opt" style="width:120px" onclick="${ansFn}('no')">No</button></div>`;
   }
+  if(q.accept==="decimal"){
+    return `<input id="fnum" type="text" inputmode="decimal" maxlength="5" placeholder="0.0" style="width:140px;height:64px;font-size:34px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">
+      <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
+  }
   if(q.single){
     return `<input id="fnum" type="tel" inputmode="numeric" maxlength="3" style="width:120px;height:64px;font-size:34px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">
       <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
@@ -1727,9 +1899,68 @@ function fracInputHTML(q, ansFn){
 function fracAnswerShown(q){
   if(q.compare) return q.answer==="A"?"A is bigger":"B is bigger";
   if(q.yesno) return q.answer;
+  if(q.accept==="decimal") return q.answer.dec;
   if(q.single) return q.answer;
   if(q.accept==="equivNotSame") return q.answer.num*2+"/"+q.answer.den*2+" (any equal fraction)";
   return q.answer.num+"/"+q.answer.den;
+}
+// the canonical correct display value for choice-matching
+function fracCorrectLabel(q){
+  if(q.compare) return q.answer;            // "A" / "B"
+  if(q.yesno) return q.answer;              // "yes" / "no"
+  if(q.accept==="decimal") return ""+q.answer.dec;
+  if(q.single) return ""+q.answer;          // number
+  // for fractions, the simplest form is the canonical label
+  const s=simplest(q.answer.num,q.answer.den);
+  return s.num+"/"+s.den;
+}
+// build 4 tappable choices (correct + distractors), shuffled, as {label, correct}
+function fracChoices(q){
+  const correct=fracCorrectLabel(q);
+  const set=new Set([correct]);
+  const out=[];
+  if(q.compare){ return shuffle([{label:"A is bigger",val:"A"},{label:"B is bigger",val:"B"}]); }
+  if(q.yesno){ return shuffle([{label:"Yes",val:"yes"},{label:"No",val:"no"}]); }
+  if(q.accept==="decimal"){
+    const d=q.answer.dec;
+    const cands=[d+0.1, d-0.1, d+0.05, Math.max(0,d-0.05), d*2, d/2].map(x=>Math.round(x*100)/100);
+    for(const c of cands){ const lab=""+c; if(c>=0 && !set.has(lab)){ set.add(lab); out.push(lab); } if(set.size>=4) break; }
+    let bump=0.2; while(set.size<4){ const c=Math.round((d+bump)*100)/100; const lab=""+c; if(!set.has(lab)){set.add(lab);out.push(lab);} bump+=0.1; }
+    return shuffle([{label:""+d,val:""+d,correct:true}].concat(out.slice(0,3).map(l=>({label:l,val:l}))));
+  }
+  if(q.single){
+    const n=q.answer;
+    const cands=[n+1,n-1,n+2,n-2,Math.max(0,n*2),Math.max(1,Math.round(n/2))];
+    for(const c of cands){ if(c>=0 && !set.has(""+c)){ set.add(""+c); out.push(""+c); } if(set.size>=4) break; }
+    let bump=3; while(set.size<4){ const c=n+bump; if(c>=0&&!set.has(""+c)){set.add(""+c);out.push(""+c);} bump++; }
+    return shuffle([{label:""+n,val:""+n,correct:true}].concat(out.slice(0,3).map(l=>({label:l,val:l}))));
+  }
+  // fraction answer: make equivalent-but-different and near-miss distractors
+  const s=simplest(q.answer.num,q.answer.den);
+  const cands=[
+    {num:s.num+1,den:s.den},{num:s.num,den:s.den+1},
+    {num:Math.max(1,s.num-1),den:s.den},{num:s.num+1,den:s.den+1},
+    {num:s.den,den:s.num} // flipped
+  ];
+  for(const c of cands){
+    if(c.den<=0||c.num<0) continue;
+    const lab=c.num+"/"+c.den;
+    // skip if it's actually equal in value to the correct answer
+    if(c.num*s.den===s.num*c.den) continue;
+    if(!set.has(lab)){ set.add(lab); out.push(lab); }
+    if(set.size>=4) break;
+  }
+  let extra=2; while(set.size<4){ const lab=(s.num+extra)+"/"+s.den; if(!set.has(lab)){set.add(lab);out.push(lab);} extra++; }
+  return shuffle([{label:correct,val:correct,correct:true}].concat(out.slice(0,3).map(l=>({label:l,val:l}))));
+}
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+// check a tapped choice value against the question
+function fracChoiceCorrect(q, val){
+  if(q.compare||q.yesno) return val===q.answer;
+  if(q.accept==="decimal") return Math.abs(parseFloat(val)-q.answer.dec)<0.001;
+  if(q.single) return parseInt(val)===q.answer;
+  const [a,b]=val.split("/").map(Number);
+  return a*q.answer.den===q.answer.num*b;
 }
 /* ======================================================================== */
 /* a short, friendly hint for the current question */
