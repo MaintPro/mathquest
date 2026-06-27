@@ -133,6 +133,29 @@
   @keyframes rise{ from{bottom:-70px;} to{bottom:110%;} }
 
   @media (prefers-reduced-motion: reduce){*{transition:none!important;}}
+  /* fraction typed answer */
+  .fracInput{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 6px}
+  .fracInput input{width:90px;height:64px;font-size:34px;font-weight:800;text-align:center;
+    background:var(--bg2);border:2px solid var(--line);border-radius:12px;color:var(--gold2);}
+  .fracInput .bar{width:90px;height:4px;background:var(--ink);margin:6px 0;border-radius:2px}
+  .fracBig{font-size:40px;font-weight:800;display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:1.05}
+  .fracBig .b{border-top:3px solid currentColor;padding-top:2px}
+
+  /* realistic balloons */
+  .balloon{position:absolute;bottom:-90px;width:62px;height:78px;border-radius:50% 50% 48% 48%;
+    box-shadow:inset -10px -12px 18px rgba(0,0,0,.22), inset 8px 8px 14px rgba(255,255,255,.35);
+    animation:floatUp var(--dur,5s) linear forwards;cursor:pointer;border:none;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:20px;
+    text-shadow:0 1px 2px rgba(0,0,0,.4);}
+  .balloon::after{content:"";position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);
+    border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid inherit;}
+  .balloon .knot{position:absolute;bottom:-7px;left:50%;width:8px;height:8px;transform:translateX(-50%) rotate(45deg);background:inherit;border-radius:2px}
+  .balloon .string{position:absolute;bottom:-46px;left:50%;width:2px;height:42px;background:rgba(255,255,255,.5);transform:translateX(-50%);}
+  @keyframes floatUp{ from{bottom:-90px;} to{bottom:115%;} }
+  .balloon.sway{animation:floatUp var(--dur,5s) linear forwards, sway 2.2s ease-in-out infinite;}
+  @keyframes sway{0%,100%{margin-left:0}50%{margin-left:14px}}
+  .pop{position:absolute;font-size:34px;animation:popfx .5s ease-out forwards;pointer-events:none}
+  @keyframes popfx{0%{transform:scale(.4);opacity:1}100%{transform:scale(1.8);opacity:0}}
 </style>
 </head>
 <body>
@@ -340,6 +363,9 @@ function stagesFor(levelId){
       {f:8,name:"÷8"},{f:9,name:"÷9"},{f:12,name:"÷12"},{f:0,name:"Mixed Mastery",mixed:true}
     ];
   }
+  if(levelId==="fractions"){
+    return FRACTION_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
+  }
   return [];
 }
 function clearedStage(k,levelId){ return (k.stageProgress&&k.stageProgress[levelId]!=null)?k.stageProgress[levelId]:-1; }
@@ -354,12 +380,22 @@ function beltFor(k,levelId){
 const PATH = [
   {id:"tables",   name:"Times Tables", icon:"✖️", op:"x", desc:"Multiplication facts"},
   {id:"division", name:"Division",     icon:"➗", op:"÷", desc:"Sharing and grouping"},
-  {id:"fractions",name:"Fractions",    icon:"🍕", op:"f", desc:"Parts of a whole", soon:true}
+  {id:"fractions",name:"Fractions",    icon:"🍕", op:"f", desc:"Parts of a whole"}
 ];
 function levelById(id){ return PATH.find(l=>l.id===id); }
 function nextLevel(id){ const i=PATH.findIndex(l=>l.id===id); return PATH[i+1]||null; }
 function isUnlocked(k,id){ return (k.levelsUnlocked||["tables"]).includes(id); }
 function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); }
+
+/* ---- Fraction stages (Phase 2: Understanding) ----
+   kind drives which question generator + visual is used. */
+const FRACTION_STAGES = [
+  {id:"name",    name:"Name the Fraction", kind:"name",    desc:"Read a picture as a fraction"},
+  {id:"shade",   name:"How Much Shaded",   kind:"shade",   desc:"Type the fraction that's coloured"},
+  {id:"build",   name:"Build a Fraction",  kind:"build",   desc:"Show a fraction on a bar"},
+  {id:"parts",   name:"Parts of a Whole",  kind:"parts",   desc:"Numerator & denominator"},
+  {id:"mixed",   name:"Fraction Master",   kind:"any",     desc:"All mixed together", mixed:true}
+];
 
 let session = {}; // active kid + quiz state
 const $ = id => document.getElementById(id);
@@ -572,6 +608,7 @@ function screenLevel(){
     </div>
     ${stageBtns}
 
+    ${lv.id!=="fractions"?`
     <div class="card" style="padding:12px 18px"><h3 style="margin:0">Free play</h3></div>
     <button class="modecard" onclick="screenExplore()">
       <span class="ico">🔍</span><span><span class="t">Explore</span>
@@ -582,6 +619,7 @@ function screenLevel(){
     <button class="modecard" onclick="startQuiz('speed')">
       <span class="ico">⚡</span><span><span class="t">Speed drill</span>
       <span class="d">${k.speedSec||5}s per question.</span></span></button>
+    `:''}
   `;
 }
 
@@ -594,6 +632,7 @@ function openStage(i){
 }
 function stageLesson(){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
+  if(lv.id==="fractions") return fracLesson();
   let body;
   if(s.mixed){
     body=`<p style="font-size:15px;line-height:1.6">This is the big one — <b>all of them mixed together</b>. No single pattern to lean on; you just need to know your ${lv.name.toLowerCase()}. Take your time, and use the tricks you've learned for each one.</p>
@@ -623,6 +662,115 @@ function stageLesson(){
       <button class="btn ghost sm" onclick="startStageTest(true)">🌱 Gentle clear (test only)</button>
     </div>`;
 }
+
+/* ================= FRACTION STAGE FLOW ================= */
+function fracLessonContent(kind){
+  if(kind==="name"||kind==="shade"){
+    return `<p style="font-size:15px;line-height:1.6">A <b>fraction</b> shows part of a whole. The <b>bottom number (denominator)</b> tells how many equal parts the whole is split into. The <b>top number (numerator)</b> tells how many of those parts we have.</p>
+      <div class="center" style="margin:14px 0">${fracPieSVG(3,4)}</div>
+      <p style="font-size:15px;text-align:center;margin:0">This circle is split into <b>4</b> equal parts, and <b>3</b> are shaded → <span class="fracBig"><span>3</span><span class="b">4</span></span></p>`;
+  }
+  if(kind==="parts"){
+    return `<p style="font-size:15px;line-height:1.6">Every fraction has two numbers:</p>
+      <ul style="font-size:15px;line-height:1.6;padding-left:20px">
+        <li><b>Top = numerator</b> — how many parts are shaded.</li>
+        <li><b>Bottom = denominator</b> — how many equal parts in total.</li>
+      </ul>
+      <div class="center" style="margin:14px 0">${fracBarSVG(2,5)}</div>
+      <p style="font-size:15px;text-align:center;margin:0">2 shaded out of 5 parts → <span class="fracBig"><span>2</span><span class="b">5</span></span></p>`;
+  }
+  return `<p style="font-size:15px;line-height:1.6">Now you'll show a fraction yourself. Read the numbers and type them into the fraction box — top number on top, bottom number on the bottom.</p>
+      <div class="center" style="margin:14px 0">${fracPieSVG(1,3)}</div>
+      <p style="font-size:15px;text-align:center;margin:0">One part out of three → <span class="fracBig"><span>1</span><span class="b">3</span></span></p>`;
+}
+function fracLesson(){
+  const k=session.kid, lv=session.level, st=session.stage, s=st.def;
+  const body = s.mixed
+    ? `<p style="font-size:15px;line-height:1.6">Time to put it all together! You'll see pictures and type the fraction, name how many parts are shaded, and read fractions from bars and circles. Remember: <b>top</b> = shaded parts, <b>bottom</b> = total parts.</p>`
+    : fracLessonContent(s.kind);
+  k.lessonsSeen[lv.id+":"+st.idx]=true; save();
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenLevel()">‹</button><h2>${s.name}</h2></div>
+    <div class="card"><h3>📖 Quick lesson</h3>${body}</div>
+    <div class="card center">
+      <p class="muted" style="margin-top:0">Ready? Answer 10 by typing the fraction. Slip-ups just get retried.</p>
+      <button class="btn gold" onclick="startFracTest(false)">Start the test</button>
+      <div style="height:8px"></div>
+      <button class="btn ghost sm" onclick="startFracTest(true)">🌱 Gentle clear</button>
+    </div>`;
+}
+function startFracTest(gentle){
+  const k=session.kid, lv=session.level, st=session.stage, s=st.def;
+  const kind = s.mixed?"any":s.kind;
+  session.ftest={lv, stage:st, kind, attempt:1, maxAttempts:4, queue:null, missed:[], correct:0, total:10, gentle:!!gentle};
+  fracTestBuild(true);
+}
+function fracTestBuild(fresh){
+  const t=session.ftest;
+  if(fresh){ t.queue=[]; for(let i=0;i<10;i++) t.queue.push(genFrac(t.kind)); }
+  else { t.queue=t.missed.slice(); }
+  t.idx=0; t.correct=0; t.total=t.queue.length; t.missed=[]; t.locked=false;
+  fracTestNext();
+}
+function fracTestNext(){
+  const t=session.ftest;
+  if(t.idx>=t.queue.length) return fracTestEnd();
+  t.current=t.queue[t.idx]; t.locked=false;
+  const q=t.current;
+  const inputArea = q.single
+    ? `<input id="fnum" type="tel" inputmode="numeric" maxlength="2" style="width:120px;height:70px;font-size:38px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">`
+    : `<span class="fracInput"><input id="fnum" type="tel" inputmode="numeric" maxlength="2" placeholder="?"><span class="bar"></span><input id="fden" type="tel" inputmode="numeric" maxlength="2" placeholder="?"></span>`;
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="screenLevel()">✕</button>
+      <span class="pill" style="color:var(--gold)">🍕 ${t.stage.def.name}</span>
+      <span class="pill">${t.idx+1} / ${t.queue.length}</span></div>
+    <div class="progress"><div style="width:${(t.idx/t.queue.length)*100}%"></div></div>
+    <div class="center" style="margin:14px 0">${q.visual}</div>
+    <p class="center" style="font-size:16px;margin:6px 0 14px">${q.prompt}</p>
+    <div class="center">${inputArea}</div>
+    <div style="margin-top:16px"><button class="btn gold" onclick="fracTestAns()">Check</button></div>
+    <div class="feedback" id="fb"></div>`;
+  setTimeout(()=>{ const n=$("fnum"); if(n) n.focus(); }, 50);
+}
+function fracTestAns(){
+  const k=session.kid, t=session.ftest, q=t.current;
+  if(t.locked) return;
+  const gotN=$("fnum")?$("fnum").value:"";
+  const gotD=$("fden")?$("fden").value:"";
+  if(gotN===""||(!q.single && gotD==="")) return toast("Type the fraction first");
+  t.locked=true;
+  const fb=$("fb");
+  if(fracCorrect(q, gotN, gotD)){
+    fb.textContent="Correct! 🎉"; fb.className="feedback good"; t.correct++; award(k,true);
+  } else {
+    const shown = q.single ? q.answer : (q.answer.num+"/"+q.answer.den);
+    fb.textContent="Answer: "+shown; fb.className="feedback bad"; t.missed.push(q);
+  }
+  t.idx++; save();
+  setTimeout(()=>{ t.locked=false; fracTestNext(); }, 1200);
+}
+function fracTestEnd(){
+  const k=session.kid, t=session.ftest, lv=t.lv, st=t.stage;
+  const passed = t.missed.length===0;
+  if(passed){
+    clearStageNow(k, lv, st, t.gentle);  // fractions: test alone clears (no speed gate in Phase 2)
+    return;
+  }
+  save();
+  const canRetry=t.attempt<t.maxAttempts;
+  app.innerHTML=`
+    <div class="card center">
+      <div style="font-size:46px">${canRetry?'🔁':'💪'}</div>
+      <h2>${t.correct}/10</h2>
+      <p class="muted">${canRetry?`Good going! Let's redo the ${t.missed.length} you missed.`:`Nice effort! Review the lesson and try again.`}</p>
+      ${canRetry
+        ? `<button class="btn gold" onclick="session.ftest.attempt++;fracTestBuild(false)">Retry missed ones</button>`
+        : `<button class="btn gold" onclick="fracLesson()">Review the lesson</button>`}
+      <div style="height:8px"></div>
+      <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
+    </div>`;
+}
+/* ====================================================== */
 function practiceStage(){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
   session.q={mode:'practice', op:lv.op, correct:0, total:10, answered:0, start:Date.now(), beaten:0,
@@ -848,12 +996,13 @@ function startWarmup(){
   warmNext();
 }
 function buildWarmQs(k){
-  // Generate 5 questions from unlocked levels, weighting tricky facts
-  const ops = (k.levelsUnlocked||["tables"]).map(id=>levelById(id)).filter(l=>l&&!l.soon);
+  // Warm-up uses the multiple-choice engine, so only x and ÷ levels (not fractions)
+  const ops = (k.levelsUnlocked||["tables"]).map(id=>levelById(id)).filter(l=>l&&!l.soon&&l.op!=="f");
+  const pool = ops.length?ops:[PATH[0]];
   const qs=[];
   for(let i=0;i<5;i++){
-    const lv=ops[Math.floor(Math.random()*ops.length)]||PATH[0];
-    session.q={op:lv.op}; // temp context for genQ
+    const lv=pool[Math.floor(Math.random()*pool.length)];
+    session.q={op:lv.op};
     qs.push({...genQ(k), levelName:lv.name});
   }
   session.q=null;
@@ -1049,6 +1198,59 @@ function saveRange(){
   session.kid.range={min:a,max:b}; save(); toast("Saved"); screenModes();
 }
 
+/* ================= FRACTIONS: visuals + question engine ================= */
+function gcd(a,b){ return b?gcd(b,a%b):a; }
+function fracBarSVG(num, den, w){
+  w=w||300; const h=64, seg=w/den;
+  let parts="";
+  for(let i=0;i<den;i++){
+    const filled=i<num;
+    parts+=`<rect x="${i*seg}" y="0" width="${seg}" height="${h}" fill="${filled?'var(--cyan)':'var(--bg2)'}" stroke="var(--ink)" stroke-width="2"/>`;
+  }
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" style="max-width:${w}px">${parts}</svg>`;
+}
+function fracPieSVG(num, den, size){
+  size=size||180; const r=size/2-4, cx=size/2, cy=size/2;
+  let slices="";
+  for(let i=0;i<den;i++){
+    const a0=(i/den)*2*Math.PI - Math.PI/2;
+    const a1=((i+1)/den)*2*Math.PI - Math.PI/2;
+    const x0=cx+r*Math.cos(a0), y0=cy+r*Math.sin(a0);
+    const x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
+    const large=(a1-a0)>Math.PI?1:0;
+    const filled=i<num;
+    slices+=`<path d="M${cx},${cy} L${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1} Z" fill="${filled?'var(--gold)':'var(--bg2)'}" stroke="var(--ink)" stroke-width="2"/>`;
+  }
+  return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">${slices}</svg>`;
+}
+function randFrac(){
+  const den=2+Math.floor(Math.random()*7);
+  const num=1+Math.floor(Math.random()*(den-1));
+  return {num,den};
+}
+function genFrac(kind){
+  if(kind==="any") kind=pick(["name","shade","build","parts"]);
+  const {num,den}=randFrac();
+  const useShape = Math.random()<0.5;
+  const visual = useShape ? fracPieSVG(num,den) : fracBarSVG(num,den);
+  if(kind==="name" || kind==="shade"){
+    return {kind, num, den, visual, prompt: kind==="name"?"What fraction is shown?":"What fraction is shaded?", answer:{num,den}, accept:"equiv"};
+  }
+  if(kind==="parts"){
+    const askNum = Math.random()<0.5;
+    return {kind, num, den, visual, prompt: askNum?"How many parts are shaded? (the top number)":"How many equal parts in total? (the bottom number)", single:true, answer: askNum?num:den };
+  }
+  return {kind, num, den, visual, prompt:`Type this fraction: ${num} out of ${den} equal parts`, answer:{num,den}, accept:"exact"};
+}
+function fracCorrect(q, gotNum, gotDen){
+  if(q.single){ return parseInt(gotNum)===q.answer; }
+  const a=parseInt(gotNum), b=parseInt(gotDen);
+  if(isNaN(a)||isNaN(b)||b===0) return false;
+  if(q.accept==="equiv"){ return a*q.answer.den === q.answer.num*b; }
+  return a===q.answer.num && b===q.answer.den;
+}
+/* ======================================================================== */
+
 /* ---- QUIZ ENGINE ---- */
 /* a short, friendly hint for the current question */
 function hintFor(c){
@@ -1112,6 +1314,15 @@ function genQ(k){
   return {a,b,ans,choices,op:"x",prompt:a+" × "+b,key:a+"x"+b};
 }
 
+function playAgain(mode, fixed, op){
+  if(fixed!=null){
+    // a single-table "Quiz me" round — keep that table
+    session.q={mode:'practice', op:op||'x', correct:0, total:10, answered:0, start:Date.now(), beaten:0, fixed:fixed};
+    nextQuestion();
+  } else {
+    startQuiz(mode);
+  }
+}
 function startQuiz(mode){
   const k=session.kid;
   const op = session.level ? session.level.op : "x";
@@ -1240,7 +1451,7 @@ function endQuiz(){
         <div class="statline"><span>⏱️ Time</span><b>${timeSec}s</b></div>
         <div class="statline"><span>🏅 Total stars</span><b>${k.stars}</b></div>
       </div>
-      <button class="btn gold" onclick="startQuiz('${q.mode}')">Play again</button>
+      <button class="btn gold" onclick="playAgain('${q.mode}', ${q.fixed!=null?q.fixed:'null'}, '${q.op||'x'}')">Play again</button>
       <div style="height:10px"></div>
       <button class="btn ghost" onclick="screenModes()">Back to menu</button>
     </div>`;
@@ -1587,11 +1798,11 @@ function popNext(){
   // build bubbles from the 4 choices
   const bubbles=c.choices.map((n,i)=>{
     const left=8+i*23+(Math.random()*6-3);
-    const dur=(4.2+Math.random()*1.6).toFixed(2);
+    const dur=(5+Math.random()*1.8).toFixed(2);
     const delay=(i*0.5).toFixed(2);
-    const col=['#36d1dc','#a78bfa','#3ddc97','#ffc233'][i];
-    return `<button class="bubble" style="left:${left}%;--dur:${dur}s;animation-delay:${delay}s;background:${col}"
-      onclick="popHit(${n})">${n}</button>`;
+    const cols=[['#36d1dc','#1c9aa6'],['#a78bfa','#7c4dff'],['#3ddc97','#1faf6e'],['#ff8a8a','#ff5252']][i];
+    return `<button class="balloon sway" style="left:${left}%;--dur:${dur}s;animation-delay:${delay}s;background:radial-gradient(circle at 35% 28%, ${cols[0]}, ${cols[1]})"
+      onclick="popHit(${n},false,this)"><span class="knot" style="background:${cols[1]}"></span><span class="string"></span>${n}</button>`;
   }).join("");
   app.innerHTML=`
     <div class="qtop">
@@ -1604,18 +1815,24 @@ function popNext(){
       ${bubbles}
     </div>
     <div class="feedback" id="fb"></div>`;
-  // if all bubbles float off screen, count as miss
-  p.timeout=setTimeout(()=>popHit(null,true), 6200);
+  p.timeout=setTimeout(()=>popHit(null,true), 7000);
 }
-function popHit(val, missed){
+function popHit(val, missed, el){
   const p=session.pop, k=session.kid;
   const fb=$("fb");
-  // if the Pop screen is no longer active (user left, or game ended), do nothing
   if(!p || !p.current || !fb || p.done){ if(p&&p.timeout) clearTimeout(p.timeout); return; }
   const c=p.current;
   if(p.locked) return; p.locked=true;
   clearTimeout(p.timeout);
-  document.querySelectorAll('.bubble').forEach(b=>{b.style.animationPlayState='paused'; b.disabled=true;});
+  // burst the tapped balloon with a pop effect
+  if(el && el.parentNode){
+    const burst=document.createElement('span');
+    burst.className='pop'; burst.textContent='💥';
+    burst.style.left=el.style.left; burst.style.bottom=getComputedStyle(el).bottom;
+    el.parentNode.appendChild(burst);
+    el.style.visibility='hidden';
+  }
+  document.querySelectorAll('.balloon').forEach(b=>{b.style.animationPlayState='paused'; b.disabled=true;});
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
   if(val===c.ans){ p.score++; award(k,true); fb.textContent=pick(["Pop! 🎉","Got it!","Nice shot!","Boom!"]); fb.className="feedback good"; }
   else { f.wrong++; fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
