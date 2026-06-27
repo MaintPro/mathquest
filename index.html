@@ -185,9 +185,16 @@ function checkStickers(k){
 }
 
 /* ---- Coins & shop ---- */
-function award(k, correct){
-  // called per correct answer: 1 star + 1 coin
-  if(correct){ k.stars++; k.coins=(k.coins||0)+1; }
+// coins earned per correct answer, scaled by the speed-drill setting
+function coinsForSpeed(sec){
+  if(sec<=3) return 5;
+  if(sec<=5) return 3;
+  if(sec<=8) return 2;
+  return 1;
+}
+function award(k, correct, coins){
+  // correct answer: 1 star always; coins default 1, or a scaled amount in speed drills
+  if(correct){ k.stars++; k.coins=(k.coins||0)+(coins!=null?coins:1); }
 }
 const SHOP_AVATARS = ["🐵","🐰","🐺","🦝","🐹","🐱","🐮","🐷","🐗","🦔","🐭","🐔","🦇","🦅","🦈","🐊"];
 const AVATAR_COST = 100;
@@ -241,6 +248,7 @@ function migrateDB(){
     if(!k.shopStickers) k.shopStickers=[];
     if(!k.range) k.range={min:1,max:12};
     if(k.speedSec==null) k.speedSec=5;
+    if(k.fracSpeedSec==null) k.fracSpeedSec=8;
     if(!k.history) k.history=[];
     if(!k.facts) k.facts={};
     if(k.stars==null) k.stars=0;
@@ -325,6 +333,7 @@ function newKid(name, avatar, pin){
     name, avatar, pin,
     range:{min:1,max:12},
     speedSec:5,
+    fracSpeedSec:8,
     stars:0,
     coins:0,                     // earned per correct answer; spent in shop
     stickers:[],
@@ -386,6 +395,23 @@ function levelById(id){ return PATH.find(l=>l.id===id); }
 function nextLevel(id){ const i=PATH.findIndex(l=>l.id===id); return PATH[i+1]||null; }
 function isUnlocked(k,id){ return (k.levelsUnlocked||["tables"]).includes(id); }
 function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); }
+
+/* Retroactively unlock any level whose PREVIOUS level is fully mastered.
+   Runs after PATH is defined; covers kids who finished a level before the
+   next one existed or was openable. */
+function unlockEarned(){
+  (DB.kids||[]).forEach(k=>{
+    if(!k.levelsUnlocked) k.levelsUnlocked=["tables"];
+    PATH.forEach((lv, idx)=>{
+      if(idx===0 || lv.soon) return;
+      const prev=PATH[idx-1];
+      const prevStages=stagesFor(prev.id);
+      const prevDone = prevStages.length>0 && clearedStage(k, prev.id) >= prevStages.length-1;
+      if(prevDone && k.levelsUnlocked.indexOf(lv.id)<0) k.levelsUnlocked.push(lv.id);
+    });
+  });
+  save();
+}
 
 /* ---- Fraction stages (Phase 2: Understanding) ----
    kind drives which question generator + visual is used. */
@@ -507,7 +533,7 @@ function pinPress(n){
 /* ---- After login: daily warm-up gate, then path home ---- */
 function afterLogin(){
   const k=session.kid;
-  // warm-up due if they have history and haven't warmed up today
+  unlockEarned();  // make sure earned levels are open (covers cross-device + old saves)
   const hasLearned = (k.history||[]).length>0;
   if(hasLearned && k.lastWarmup!==todayStr()){
     return screenWarmupIntro();
@@ -693,7 +719,7 @@ function fracLesson(){
     <div class="topbar"><button class="back" onclick="screenLevel()">‹</button><h2>${s.name}</h2></div>
     <div class="card"><h3>📖 Quick lesson</h3>${body}</div>
     <div class="card center">
-      <p class="muted" style="margin-top:0">Ready? Answer 10 by typing the fraction. Slip-ups just get retried.</p>
+      <p class="muted" style="margin-top:0">Two gates: a 10/10 typing test, then a speed round (type each in time). Or take the gentle route below.</p>
       <button class="btn gold" onclick="startFracTest(false)">Start the test</button>
       <div style="height:8px"></div>
       <button class="btn ghost sm" onclick="startFracTest(true)">🌱 Gentle clear</button>
@@ -753,7 +779,19 @@ function fracTestEnd(){
   const k=session.kid, t=session.ftest, lv=t.lv, st=t.stage;
   const passed = t.missed.length===0;
   if(passed){
-    clearStageNow(k, lv, st, t.gentle);  // fractions: test alone clears (no speed gate in Phase 2)
+    if(t.gentle){ clearStageNow(k, lv, st, true); return; }
+    // standard route: compulsory fraction speed drill next
+    app.innerHTML=`
+      <div class="card center" style="border-color:var(--green)">
+        <div style="font-size:48px">✅</div>
+        <h2>Test passed — 10/10!</h2>
+        <p class="muted">Now the speed round: read each picture and type the fraction <b>in time</b>. All 10 to clear ${st.def.name}.</p>
+      </div>
+      <div class="card center">
+        <button class="btn gold" onclick="startFracSpeed()">⚡ Start speed drill</button>
+        <div style="height:8px"></div>
+        <button class="btn ghost" onclick="screenLevel()">Later</button>
+      </div>`;
     return;
   }
   save();
@@ -766,6 +804,96 @@ function fracTestEnd(){
       ${canRetry
         ? `<button class="btn gold" onclick="session.ftest.attempt++;fracTestBuild(false)">Retry missed ones</button>`
         : `<button class="btn gold" onclick="fracLesson()">Review the lesson</button>`}
+      <div style="height:8px"></div>
+      <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
+    </div>`;
+}
+
+/* ---- Fraction speed drill: read + type in time, all 10, retry missed ---- */
+function startFracSpeed(){
+  const k=session.kid, lv=session.level, st=session.stage;
+  const kind = st.def.mixed?"any":st.def.kind;
+  session.fspeed={lv, stage:st, kind, speedSec:k.fracSpeedSec||8, queue:null, missed:[], correct:0};
+  fracSpeedBuild(true);
+}
+function fracSpeedBuild(fresh){
+  const fp=session.fspeed;
+  if(fresh){ fp.queue=[]; for(let i=0;i<10;i++) fp.queue.push(genFrac(fp.kind)); }
+  else { fp.queue=fp.missed.slice(); }
+  fp.idx=0; fp.correct=0; fp.total=fp.queue.length; fp.missed=[]; fp.locked=false;
+  fracSpeedNext();
+}
+function fracSpeedNext(){
+  const fp=session.fspeed;
+  if(fp.timer){ clearInterval(fp.timer); fp.timer=null; }
+  if(fp.idx>=fp.queue.length) return fracSpeedEnd();
+  fp.current=fp.queue[fp.idx]; fp.locked=false;
+  const q=fp.current;
+  const inputArea = q.single
+    ? `<input id="fnum" type="tel" inputmode="numeric" maxlength="2" style="width:120px;height:64px;font-size:34px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">`
+    : `<span class="fracInput"><input id="fnum" type="tel" inputmode="numeric" maxlength="2" placeholder="?"><span class="bar"></span><input id="fden" type="tel" inputmode="numeric" maxlength="2" placeholder="?"></span>`;
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="exitFracSpeed()">✕</button>
+      <span class="pill" style="color:var(--gold)">⚡ ${fp.stage.def.name}</span>
+      <span class="pill timer" id="timer">⚡ ${fp.speedSec}s</span></div>
+    <div class="progress"><div style="width:${(fp.idx/fp.queue.length)*100}%"></div></div>
+    <div class="center" style="margin:10px 0">${q.visual}</div>
+    <p class="center" style="font-size:15px;margin:4px 0 12px">${q.prompt}</p>
+    <div class="center">${inputArea}</div>
+    <div style="margin-top:14px"><button class="btn gold" onclick="fracSpeedAns()">Check</button></div>
+    <div class="feedback" id="fb"></div>`;
+  setTimeout(()=>{ const n=$("fnum"); if(n) n.focus(); }, 50);
+  fp.left=fp.speedSec;
+  const myId=setInterval(()=>{
+    if(fp.timer!==myId || fp.locked){ clearInterval(myId); return; }
+    fp.left--;
+    const el=$("timer"); if(el) el.textContent="⚡ "+Math.max(0,fp.left)+"s";
+    if(fp.left<=0){ clearInterval(myId); if(fp.timer===myId) fp.timer=null; fracSpeedTimeout(); }
+  },1000);
+  fp.timer=myId;
+}
+function fracSpeedTimeout(){
+  const fp=session.fspeed, q=fp.current;
+  if(fp.locked) return; fp.locked=true;
+  if(fp.timer){ clearInterval(fp.timer); fp.timer=null; }
+  fp.missed.push(q);
+  const fb=$("fb"); if(fb){ const shown=q.single?q.answer:(q.answer.num+"/"+q.answer.den); fb.textContent="Too slow! Answer: "+shown; fb.className="feedback bad"; }
+  fp.idx++;
+  setTimeout(()=>fracSpeedNext(),1200);
+}
+function fracSpeedAns(){
+  const k=session.kid, fp=session.fspeed, q=fp.current;
+  if(fp.locked) return;
+  const gotN=$("fnum")?$("fnum").value:"";
+  const gotD=$("fden")?$("fden").value:"";
+  if(gotN===""||(!q.single && gotD==="")) return toast("Type the fraction first");
+  fp.locked=true;
+  if(fp.timer){ clearInterval(fp.timer); fp.timer=null; }
+  const fb=$("fb");
+  if(fracCorrect(q, gotN, gotD)){
+    const cn=coinsForSpeed(fp.speedSec);
+    if(fb){ fb.textContent="⚡ In time! +"+cn+" 🪙"; fb.className="feedback good"; }
+    fp.correct++; award(k,true,cn);
+  } else {
+    const shown=q.single?q.answer:(q.answer.num+"/"+q.answer.den);
+    if(fb){ fb.textContent="Answer: "+shown; fb.className="feedback bad"; }
+    fp.missed.push(q);
+  }
+  fp.idx++; save();
+  setTimeout(()=>fracSpeedNext(),1100);
+}
+function exitFracSpeed(){ const fp=session.fspeed; if(fp&&fp.timer){clearInterval(fp.timer);fp.timer=null;} screenLevel(); }
+function fracSpeedEnd(){
+  const k=session.kid, fp=session.fspeed, lv=fp.lv, st=fp.stage;
+  if(fp.timer){ clearInterval(fp.timer); fp.timer=null; }
+  if(fp.missed.length===0){ clearStageNow(k, lv, st, false); return; }
+  save();
+  app.innerHTML=`
+    <div class="card center">
+      <div style="font-size:46px">⏱️</div>
+      <h2>${fp.correct}/10 in time</h2>
+      <p class="muted">Almost! Retry the ${fp.missed.length} you missed to clear the stage.</p>
+      <button class="btn gold" onclick="fracSpeedBuild(false)">⚡ Retry missed ones</button>
       <div style="height:8px"></div>
       <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
     </div>`;
@@ -915,7 +1043,7 @@ function stageSpeedAns(el,val){
   document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
   const fb=$("fb");
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
-  if(val===c.ans){ el.classList.add("good"); if(fb){fb.textContent="⚡ In time!"; fb.className="feedback good";} sp.correct++; award(k,true); }
+  if(val===c.ans){ el.classList.add("good"); const cn=coinsForSpeed(sp.speedSec); if(fb){fb.textContent="⚡ In time! +"+cn+" 🪙"; fb.className="feedback good";} sp.correct++; award(k,true,cn); }
   else { el.classList.add("bad"); f.wrong++; sp.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); if(fb){fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad";} }
   sp.idx++; save();
   setTimeout(()=>stageSpeedNext(), val===c.ans?500:1100);
@@ -1181,16 +1309,21 @@ function screenRange(){
         <input type="number" id="rmax" min="1" max="20" value="${k.range.max}">
       </div>
       <p class="muted" style="font-size:13px;margin-top:10px">Questions will use these times tables, e.g. 7 × 8.</p>
-      <label class="lbl">Speed drill goal (seconds per question)</label>
+      <label class="lbl">Speed drill goal — times tables & division</label>
       <div class="seg">
-        ${[3,5,8,10].map(s=>`<button class="chip ${(k.speedSec||5)===s?'on':''}" onclick="setSpeed(${s})">${s}s</button>`).join("")}
+        ${[3,5,8,10].map(s=>`<button class="chip ${(k.speedSec||5)===s?'on':''}" onclick="setSpeed(${s})">${s}s · ${coinsForSpeed(s)}🪙</button>`).join("")}
       </div>
-      <p class="muted" style="font-size:13px;margin-top:8px">Tip: start at 8–10s and lower it as they get faster. 3s is an expert goal.</p>
+      <p class="muted" style="font-size:13px;margin-top:8px">Faster goal = more coins per correct answer. 3s is an expert goal.</p>
+      <label class="lbl">Speed drill goal — fractions (reading takes longer)</label>
+      <div class="seg">
+        ${[5,8,10,12].map(s=>`<button class="chip ${(k.fracSpeedSec||8)===s?'on':''}" onclick="setFracSpeed(${s})">${s}s · ${coinsForSpeed(s)}🪙</button>`).join("")}
+      </div>
       <div style="margin-top:16px"><button class="btn" onclick="saveRange()">Save</button></div>
     </div>`;
 }
 function setRange(a,b){ session.kid.range={min:a,max:b}; save(); screenRange(); toast("Saved"); }
-function setSpeed(s){ session.kid.speedSec=s; save(); screenRange(); toast("Goal: "+s+"s"); }
+function setSpeed(s){ session.kid.speedSec=s; save(); syncNow(); screenRange(); toast("Goal: "+s+"s"); }
+function setFracSpeed(s){ session.kid.fracSpeedSec=s; save(); syncNow(); screenRange(); toast("Fraction goal: "+s+"s"); }
 function saveRange(){
   let a=parseInt($("rmin").value)||1, b=parseInt($("rmax").value)||12;
   a=Math.max(1,Math.min(20,a)); b=Math.max(1,Math.min(20,b));
@@ -1952,7 +2085,7 @@ try {
   document.getElementById('app').innerHTML =
     '<div style="padding:60px 24px;text-align:center;color:#8fa6c4;font-family:sans-serif">'+
     '<div style="font-size:40px;margin-bottom:10px">🔄</div>Loading players…</div>';
-  syncPull(function(){ screenProfiles(); });
+  syncPull(function(){ unlockEarned(); screenProfiles(); });
 } catch(err) {
   document.getElementById('app').innerHTML =
     '<div style="padding:24px;color:#eaf2ff;font-family:sans-serif">'+
