@@ -425,7 +425,14 @@ const FRACTION_STAGES = [
   {id:"shade",   name:"How Much Shaded",   kind:"shade",   desc:"Type the fraction that's coloured"},
   {id:"build",   name:"Build a Fraction",  kind:"build",   desc:"Show a fraction on a bar"},
   {id:"parts",   name:"Parts of a Whole",  kind:"parts",   desc:"Numerator & denominator"},
-  // Chapter 2 — Equivalent & Simplifying
+  // Chapter 2 — Comparing & the number line
+  {id:"compare",  name:"Which is Bigger?",  kind:"compare",  desc:"Compare two fractions"},
+  {id:"numline",  name:"On the Number Line",kind:"numline",  desc:"Place a fraction 0–1"},
+  // Chapter 3 — Improper & mixed numbers
+  {id:"improper", name:"Improper Fractions", kind:"improper", desc:"More than a whole"},
+  {id:"mixed_num", name:"Mixed Numbers",      kind:"mixed_num",desc:"Whole + fraction"},
+  {id:"frac_of",   name:"Fraction of a Number",kind:"frac_of", desc:"1/3 of 12 = ?"},
+  // Chapter 4 — Equivalent & Simplifying
   {id:"equiv_see",  name:"Equal Fractions",     kind:"equiv_see",  desc:"See that 1/2 = 2/4"},
   {id:"equiv_make", name:"Make an Equal One",   kind:"equiv_make", desc:"Type an equivalent fraction"},
   {id:"simplify",   name:"Simplify It",         kind:"simplify",   desc:"Reduce to simplest form"},
@@ -739,6 +746,30 @@ function fracLessonContent(kind){
         <li>2/4 — not simplest ❌ (both divide by 2 → ½)</li>
       </ul>`;
   }
+  if(kind==="compare"){
+    return `<p style="font-size:15px;line-height:1.6">To compare fractions, look at how much is shaded. The bar that's <b>more filled</b> is bigger.</p>
+      <div style="margin:14px 0">${twoBarSVG(3,4,1,2)}</div>
+      <p style="font-size:15px;line-height:1.55;margin:0">¾ fills more than ½, so ¾ is bigger. Tip: if bottoms match, the bigger top wins.</p>`;
+  }
+  if(kind==="numline"){
+    return `<p style="font-size:15px;line-height:1.6">A fraction also lives on a <b>number line</b> between 0 and 1. The bottom number says how many equal steps; the top says how many steps along.</p>
+      <div class="center" style="margin:14px 0">${numLineSVG(3,4)}</div>
+      <p style="font-size:15px;text-align:center;margin:0">The arrow is 3 steps out of 4 → <span class="fracBig"><span>3</span><span class="b">4</span></span></p>`;
+  }
+  if(kind==="improper"){
+    return `<p style="font-size:15px;line-height:1.6">An <b>improper fraction</b> has a top <b>bigger than</b> the bottom — it's more than one whole.</p>
+      <div class="center" style="margin:14px 0">${wholesSVG(5,4)}</div>
+      <p style="font-size:15px;text-align:center;margin:0">One full circle (4/4) plus 1 more quarter = <span class="fracBig"><span>5</span><span class="b">4</span></span></p>`;
+  }
+  if(kind==="mixed_num"){
+    return `<p style="font-size:15px;line-height:1.6">A <b>mixed number</b> is a whole number and a fraction together, like 1½. To turn it into an improper fraction: <b>multiply the whole by the bottom, add the top</b>.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">1½ → (1×2)+1 = 3 → <span class="fracBig"><span>3</span><span class="b">2</span></span></p>`;
+  }
+  if(kind==="frac_of"){
+    return `<p style="font-size:15px;line-height:1.6">To find a <b>fraction of a number</b>: divide by the bottom, then multiply by the top.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">⅓ of 12 → 12 ÷ 3 = 4 → 4 × 1 = <b>4</b></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">⅔ of 12 → 12 ÷ 3 = 4 → 4 × 2 = <b>8</b>.</p>`;
+  }
   if(kind==="add_same"||kind==="sub_same"){
     const op=kind==="add_same"?"add":"subtract";
     const sym=kind==="add_same"?"+":"−";
@@ -815,7 +846,7 @@ function fracTestAns(yn){
   const k=session.kid, t=session.ftest, q=t.current;
   if(t.locked) return;
   let gotN, gotD="";
-  if(q.yesno){ gotN=yn; }
+  if(q.yesno||q.compare){ gotN=yn; }
   else {
     gotN=$("fnum")?$("fnum").value:""; gotD=$("fden")?$("fden").value:"";
     if(gotN===""||(!q.single && gotD==="")) return toast("Type the fraction first");
@@ -919,7 +950,7 @@ function fracSpeedAns(yn){
   const k=session.kid, fp=session.fspeed, q=fp.current;
   if(fp.locked) return;
   let gotN, gotD="";
-  if(q.yesno){ gotN=yn; }
+  if(q.yesno||q.compare){ gotN=yn; }
   else {
     gotN=$("fnum")?$("fnum").value:""; gotD=$("fden")?$("fden").value:"";
     if(gotN===""||(!q.single && gotD==="")) return toast("Type the fraction first");
@@ -1427,6 +1458,35 @@ function friendlyFrac(maxDen){
   // reduce to simplest so we control the "base"
   const s=simplest(num,den); return {num:s.num, den:s.den};
 }
+// number line 0..1 with den ticks and an arrow at num/den
+function numLineSVG(num,den){
+  const w=320,h=70,pad=20,lineY=40,usable=w-2*pad;
+  let ticks="";
+  for(let i=0;i<=den;i++){
+    const x=pad+(usable*i/den);
+    ticks+=`<line x1="${x}" y1="${lineY-7}" x2="${x}" y2="${lineY+7}" stroke="var(--ink)" stroke-width="2"/>`;
+    if(i===0) ticks+=`<text x="${x}" y="${lineY+26}" fill="var(--muted)" font-size="13" text-anchor="middle">0</text>`;
+    if(i===den) ticks+=`<text x="${x}" y="${lineY+26}" fill="var(--muted)" font-size="13" text-anchor="middle">1</text>`;
+  }
+  const ax=pad+(usable*num/den);
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" style="max-width:${w}px">
+    <line x1="${pad}" y1="${lineY}" x2="${w-pad}" y2="${lineY}" stroke="var(--ink)" stroke-width="2"/>
+    ${ticks}
+    <polygon points="${ax},${lineY-22} ${ax-7},${lineY-10} ${ax+7},${lineY-10}" fill="var(--gold)"/>
+    <line x1="${ax}" y1="${lineY-10}" x2="${ax}" y2="${lineY}" stroke="var(--gold)" stroke-width="3"/>
+  </svg>`;
+}
+// multiple whole circles to show an improper fraction (num/den, num can exceed den)
+function wholesSVG(num,den){
+  const wholes=Math.ceil(num/den);
+  let out=`<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">`;
+  let remaining=num;
+  for(let wIdx=0; wIdx<wholes; wIdx++){
+    const fillThis=Math.min(den, remaining); remaining-=fillThis;
+    out+=`<div>${fracPieSVG(fillThis,den,90)}</div>`;
+  }
+  return out+`</div>`;
+}
 // two bars side by side showing the same shaded amount with different splits
 function twoBarSVG(n1,d1,n2,d2){
   const w=300;
@@ -1436,7 +1496,7 @@ function twoBarSVG(n1,d1,n2,d2){
   </div>`;
 }
 function genFrac(kind){
-  if(kind==="any") kind=pick(["name","shade","build","parts","equiv_make","simplify","simplest"]);
+  if(kind==="any") kind=pick(["name","shade","build","parts","compare","numline","improper","mixed_num","frac_of","equiv_make","simplify","simplest"]);
   if(kind==="op_any") kind=pick(["add_same","sub_same","add_diff","sub_diff","mul","div"]);
   // ---- Understanding kinds ----
   if(kind==="name" || kind==="shade" || kind==="build" || kind==="parts"){
@@ -1451,6 +1511,56 @@ function genFrac(kind){
       return {kind, num, den, visual, prompt: askNum?"How many parts are shaded? (the top number)":"How many equal parts in total? (the bottom number)", single:true, answer: askNum?num:den };
     }
     return {kind, num, den, visual, prompt:`Type this fraction: ${num} out of ${den} equal parts`, answer:{num,den}, accept:"exact"};
+  }
+  // ---- Compare two fractions (yes/no style via picking bigger) ----
+  if(kind==="compare"){
+    let f1=randFrac(), f2=randFrac();
+    // avoid equal values
+    while(f1.num*f2.den === f2.num*f1.den){ f2=randFrac(); }
+    const firstBigger = f1.num*f2.den > f2.num*f1.den;
+    return {kind, compare:true, f1, f2,
+      visual:`<div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+        <div style="width:100%;text-align:center">${fracBarSVG(f1.num,f1.den,300)}<div class="muted" style="font-size:14px">A = ${f1.num}/${f1.den}</div></div>
+        <div style="width:100%;text-align:center">${fracBarSVG(f2.num,f2.den,300)}<div class="muted" style="font-size:14px">B = ${f2.num}/${f2.den}</div></div></div>`,
+      prompt:"Which is bigger?", answer: firstBigger?"A":"B"};
+  }
+  // ---- Number line: place a fraction 0..1 (type the fraction at the mark) ----
+  if(kind==="numline"){
+    const den=pick([2,3,4,5,6,8]);
+    const num=1+Math.floor(Math.random()*(den-1));
+    return {kind, num, den, visual: numLineSVG(num,den),
+      prompt:"What fraction is the arrow pointing to?", answer:{num,den}, accept:"equiv"};
+  }
+  // ---- Improper fraction from a picture (more than one whole) ----
+  if(kind==="improper"){
+    const den=pick([2,3,4]);
+    const wholes=1+Math.floor(Math.random()*2);      // 1 or 2 full
+    const extra=1+Math.floor(Math.random()*(den-1)); // partial
+    const num=wholes*den+extra;
+    return {kind, num, den, visual: wholesSVG(num,den),
+      prompt:"Write the improper fraction shown (top can be bigger than bottom).",
+      answer:{num,den}, accept:"exact"};
+  }
+  // ---- Mixed number -> improper, or naming whole+part ----
+  if(kind==="mixed_num"){
+    const den=pick([2,3,4,5]);
+    const whole=1+Math.floor(Math.random()*3);
+    const part=1+Math.floor(Math.random()*(den-1));
+    const improperNum=whole*den+part;
+    return {kind, num:improperNum, den, whole, part, visual: wholesSVG(improperNum,den),
+      prompt:`This is ${whole} whole and ${part}/${den} more. Type it as an improper fraction.`,
+      answer:{num:improperNum,den}, accept:"exact"};
+  }
+  // ---- Fraction of a number: 1/3 of 12 ----
+  if(kind==="frac_of"){
+    const den=pick([2,3,4,5]);
+    const mult=2+Math.floor(Math.random()*5);       // whole divisible by den
+    const whole=den*mult;
+    const num=1+Math.floor(Math.random()*(den-1));
+    const ans=(whole/den)*num;
+    return {kind, single:true,
+      visual:`<div style="font-size:30px;font-weight:800;text-align:center;color:var(--gold2)"><span class="fracBig"><span>${num}</span><span class="b">${den}</span></span> of ${whole}</div>`,
+      prompt:`What is ${num}/${den} of ${whole}?`, answer:ans};
   }
   // ---- Equivalent: SEE (two bars, name the second) ----
   if(kind==="equiv_see"){
@@ -1546,9 +1656,10 @@ function genFracOp(kind){
 }
 // signature of a fraction question, to detect duplicates within one round
 function fracSig(q){
+  if(q.compare) return q.kind+":"+q.f1.num+"/"+q.f1.den+"vs"+q.f2.num+"/"+q.f2.den;
   if(q.fracOp) return q.kind+":"+q.a.num+"/"+q.a.den+q.sym+q.b.num+"/"+q.b.den;
   if(q.yesno) return q.kind+":"+q.num+"/"+q.den;
-  if(q.single) return q.kind+":"+q.num+"/"+q.den+":"+(q.prompt.indexOf('top')>=0?'n':'d');
+  if(q.single) return q.kind+":"+q.num+"/"+q.den+":"+(q.prompt||"");
   return q.kind+":"+q.num+"/"+q.den;
 }
 // build n questions trying hard to avoid repeats; allows repeats only if the pool is exhausted
@@ -1564,6 +1675,7 @@ function genFracSet(kind, n){
   return out;
 }
 function fracCorrect(q, gotNum, gotDen){
+  if(q.compare){ return (""+gotNum).toUpperCase()===q.answer; }
   if(q.yesno){ return (""+gotNum).toLowerCase()===q.answer; }
   if(q.single){ return parseInt(gotNum)===q.answer; }
   const a=parseInt(gotNum), b=parseInt(gotDen);
@@ -1595,19 +1707,25 @@ function fracIsSimplest(q, gotNum, gotDen){
 }
 /* shared: input UI for a fraction question (handles yes/no, single, fraction) */
 function fracInputHTML(q, ansFn){
+  if(q.compare){
+    return `<div class="row" style="justify-content:center;gap:12px">
+      <button class="opt" style="width:120px" onclick="${ansFn}('A')">A is bigger</button>
+      <button class="opt" style="width:120px" onclick="${ansFn}('B')">B is bigger</button></div>`;
+  }
   if(q.yesno){
     return `<div class="row" style="justify-content:center;gap:12px">
       <button class="opt" style="width:120px" onclick="${ansFn}('yes')">Yes</button>
       <button class="opt" style="width:120px" onclick="${ansFn}('no')">No</button></div>`;
   }
   if(q.single){
-    return `<input id="fnum" type="tel" inputmode="numeric" maxlength="2" style="width:120px;height:64px;font-size:34px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">
+    return `<input id="fnum" type="tel" inputmode="numeric" maxlength="3" style="width:120px;height:64px;font-size:34px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">
       <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
   }
   return `<span class="fracInput"><input id="fnum" type="tel" inputmode="numeric" maxlength="3" placeholder="?"><span class="bar"></span><input id="fden" type="tel" inputmode="numeric" maxlength="3" placeholder="?"></span>
     <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
 }
 function fracAnswerShown(q){
+  if(q.compare) return q.answer==="A"?"A is bigger":"B is bigger";
   if(q.yesno) return q.answer;
   if(q.single) return q.answer;
   if(q.accept==="equivNotSame") return q.answer.num*2+"/"+q.answer.den*2+" (any equal fraction)";
@@ -2261,6 +2379,7 @@ function screenManage(){
     <div class="statline" style="flex-wrap:wrap;gap:6px">
       <span>${k.avatar} ${esc(k.name)} <span class="muted">· ⭐${k.stars} · 🪙${k.coins||0}</span></span>
       <span><button class="chip" onclick="togglePin('${k.id}',this)" data-pin="${k.pin}">Show PIN</button>
+      <button class="chip" onclick="changePin('${k.id}')">Change PIN</button>
       <button class="chip" onclick="resetKid('${k.id}')">Reset</button>
       <button class="chip" onclick="delKid('${k.id}')">Remove</button></span>
     </div>`).join("");
@@ -2272,13 +2391,21 @@ function screenManage(){
     </div>
     <div class="card">
       <h3>Reset</h3>
-      <p class="muted" style="font-size:14px;line-height:1.5;margin:6px 0 10px">"Reset" clears a child's stars, coins, belts and stage progress but keeps their name and PIN. "Remove" deletes the player entirely.</p>
+      <p class="muted" style="font-size:14px;line-height:1.5;margin:6px 0 10px">"Change PIN" sets a new 4-digit PIN without touching progress. "Reset" clears a child's stars, coins, belts and stage progress but keeps their name and PIN. "Remove" deletes the player entirely.</p>
       <button class="btn ghost sm" onclick="resetAll()" style="color:var(--red)">Reset ALL players' progress</button>
     </div>
     <div class="card">
       <h3>About</h3>
       <p class="muted" style="font-size:14px;line-height:1.5">Data is stored only on this device. PINs are hidden by default — tap "Show PIN" to reveal one. Add this page to the home screen for a full-screen, offline app.</p>
     </div>`;
+}
+function changePin(id){
+  const k=DB.kids.find(x=>x.id===id); if(!k) return;
+  const np=prompt("Enter a new 4-digit PIN for "+k.name+":", k.pin);
+  if(np===null) return; // cancelled
+  if(!/^\d{4}$/.test(np)){ toast("PIN must be exactly 4 digits"); return; }
+  k.pin=np; save(); syncKid(k); toast(k.name+"'s PIN changed");
+  screenManage();
 }
 function togglePin(id,btn){
   if(btn.textContent==="Show PIN"){ btn.textContent="PIN "+btn.dataset.pin; }
