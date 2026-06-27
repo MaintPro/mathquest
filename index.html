@@ -375,6 +375,9 @@ function stagesFor(levelId){
   if(levelId==="fractions"){
     return FRACTION_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
   }
+  if(levelId==="fracops"){
+    return FRACOP_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
+  }
   return [];
 }
 function clearedStage(k,levelId){ return (k.stageProgress&&k.stageProgress[levelId]!=null)?k.stageProgress[levelId]:-1; }
@@ -389,7 +392,8 @@ function beltFor(k,levelId){
 const PATH = [
   {id:"tables",   name:"Times Tables", icon:"✖️", op:"x", desc:"Multiplication facts"},
   {id:"division", name:"Division",     icon:"➗", op:"÷", desc:"Sharing and grouping"},
-  {id:"fractions",name:"Fractions",    icon:"🍕", op:"f", desc:"Parts of a whole"}
+  {id:"fractions",name:"Fractions",    icon:"🍕", op:"f", desc:"Parts of a whole"},
+  {id:"fracops",  name:"Fraction Operations", icon:"🧮", op:"fo", desc:"Add, subtract, multiply, divide"}
 ];
 function levelById(id){ return PATH.find(l=>l.id===id); }
 function nextLevel(id){ const i=PATH.findIndex(l=>l.id===id); return PATH[i+1]||null; }
@@ -428,6 +432,16 @@ const FRACTION_STAGES = [
   {id:"simplest",   name:"Is It Simplest?",     kind:"simplest",   desc:"Already simplest? yes/no"},
   // Final
   {id:"mixed",   name:"Fraction Master",   kind:"any",     desc:"All mixed together", mixed:true}
+];
+
+const FRACOP_STAGES = [
+  {id:"add_same",  name:"Add (same bottom)",      kind:"add_same",  desc:"1/4 + 2/4"},
+  {id:"sub_same",  name:"Subtract (same bottom)", kind:"sub_same",  desc:"3/5 − 1/5"},
+  {id:"add_diff",  name:"Add (different bottom)", kind:"add_diff",  desc:"1/2 + 1/3"},
+  {id:"sub_diff",  name:"Subtract (different)",   kind:"sub_diff",  desc:"3/4 − 1/2"},
+  {id:"mul",       name:"Multiply",               kind:"mul",       desc:"2/3 × 1/4"},
+  {id:"div",       name:"Divide",                 kind:"div",       desc:"1/2 ÷ 1/4"},
+  {id:"op_mixed",  name:"Operations Master",      kind:"op_any",    desc:"All four mixed", mixed:true}
 ];
 
 let session = {}; // active kid + quiz state
@@ -665,7 +679,7 @@ function openStage(i){
 }
 function stageLesson(){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
-  if(lv.id==="fractions") return fracLesson();
+  if(lv.id==="fractions"||lv.id==="fracops") return fracLesson();
   let body;
   if(s.mixed){
     body=`<p style="font-size:15px;line-height:1.6">This is the big one — <b>all of them mixed together</b>. No single pattern to lean on; you just need to know your ${lv.name.toLowerCase()}. Take your time, and use the tricks you've learned for each one.</p>
@@ -725,6 +739,29 @@ function fracLessonContent(kind){
         <li>2/4 — not simplest ❌ (both divide by 2 → ½)</li>
       </ul>`;
   }
+  if(kind==="add_same"||kind==="sub_same"){
+    const op=kind==="add_same"?"add":"subtract";
+    const sym=kind==="add_same"?"+":"−";
+    return `<p style="font-size:15px;line-height:1.6">When the <b>bottom numbers are the same</b>, just ${op} the <b>top numbers</b> and keep the bottom!</p>
+      <p style="font-size:18px;text-align:center;margin:12px 0"><span class="fracBig"><span>1</span><span class="b">5</span></span> ${sym} <span class="fracBig"><span>2</span><span class="b">5</span></span> = <span class="fracBig"><span>${kind==="add_same"?3:1}</span><span class="b">5</span></span></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">The bottom stays 5 — we're counting fifths.</p>`;
+  }
+  if(kind==="add_diff"||kind==="sub_diff"){
+    const sym=kind==="add_diff"?"+":"−";
+    return `<p style="font-size:15px;line-height:1.6">When bottoms are <b>different</b>, first make them the <b>same</b> (a common denominator), then ${kind==="add_diff"?"add":"subtract"} the tops.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">½ ${sym} ⅓ → <span class="fracBig"><span>3</span><span class="b">6</span></span> ${sym} <span class="fracBig"><span>2</span><span class="b">6</span></span> = <span class="fracBig"><span>${kind==="add_diff"?5:1}</span><span class="b">6</span></span></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Tip: multiply the two bottoms (2×3=6) to find a common one.</p>`;
+  }
+  if(kind==="mul"){
+    return `<p style="font-size:15px;line-height:1.6">Multiplying is the <b>easiest</b>! Just multiply the <b>tops together</b> and the <b>bottoms together</b>.</p>
+      <p style="font-size:18px;text-align:center;margin:12px 0"><span class="fracBig"><span>2</span><span class="b">3</span></span> × <span class="fracBig"><span>1</span><span class="b">4</span></span> = <span class="fracBig"><span>2×1</span><span class="b">3×4</span></span> = <span class="fracBig"><span>2</span><span class="b">12</span></span></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">No common denominator needed. (You can simplify the answer for a bonus!)</p>`;
+  }
+  if(kind==="div"){
+    return `<p style="font-size:15px;line-height:1.6">To divide, <b>flip the second fraction</b> and multiply (this is called "keep, change, flip").</p>
+      <p style="font-size:17px;text-align:center;margin:12px 0"><span class="fracBig"><span>1</span><span class="b">2</span></span> ÷ <span class="fracBig"><span>1</span><span class="b">4</span></span> = <span class="fracBig"><span>1</span><span class="b">2</span></span> × <span class="fracBig"><span>4</span><span class="b">1</span></span> = <span class="fracBig"><span>4</span><span class="b">2</span></span> = 2</p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Keep the first, change ÷ to ×, flip the second.</p>`;
+  }
   return `<p style="font-size:15px;line-height:1.6">Now you'll show a fraction yourself. Read the numbers and type them into the fraction box — top number on top, bottom number on the bottom.</p>
       <div class="center" style="margin:14px 0">${fracPieSVG(1,3)}</div>
       <p style="font-size:15px;text-align:center;margin:0">One part out of three → <span class="fracBig"><span>1</span><span class="b">3</span></span></p>`;
@@ -753,7 +790,7 @@ function startFracTest(gentle){
 }
 function fracTestBuild(fresh){
   const t=session.ftest;
-  if(fresh){ t.queue=[]; for(let i=0;i<10;i++) t.queue.push(genFrac(t.kind)); }
+  if(fresh){ t.queue=genFracSet(t.kind,10); }
   else { t.queue=t.missed.slice(); }
   t.idx=0; t.correct=0; t.total=t.queue.length; t.missed=[]; t.locked=false;
   fracTestNext();
@@ -786,7 +823,10 @@ function fracTestAns(yn){
   t.locked=true;
   const fb=$("fb");
   if(fracCorrect(q, gotN, gotD)){
-    fb.textContent="Correct! 🎉"; fb.className="feedback good"; t.correct++; award(k,true);
+    let bonus = (q.accept==="equivBonus" && fracIsSimplest(q,gotN,gotD)) ? 1 : 0;
+    if(bonus){ fb.textContent="Correct & simplest! +1 🪙 bonus 🌟"; award(k,true,2); }
+    else { fb.textContent="Correct! 🎉"; award(k,true); }
+    fb.className="feedback good"; t.correct++;
   } else {
     fb.textContent="Answer: "+fracAnswerShown(q); fb.className="feedback bad"; t.missed.push(q);
   }
@@ -836,7 +876,7 @@ function startFracSpeed(){
 }
 function fracSpeedBuild(fresh){
   const fp=session.fspeed;
-  if(fresh){ fp.queue=[]; for(let i=0;i<10;i++) fp.queue.push(genFrac(fp.kind)); }
+  if(fresh){ fp.queue=genFracSet(fp.kind,10); }
   else { fp.queue=fp.missed.slice(); }
   fp.idx=0; fp.correct=0; fp.total=fp.queue.length; fp.missed=[]; fp.locked=false;
   fracSpeedNext();
@@ -1397,6 +1437,7 @@ function twoBarSVG(n1,d1,n2,d2){
 }
 function genFrac(kind){
   if(kind==="any") kind=pick(["name","shade","build","parts","equiv_make","simplify","simplest"]);
+  if(kind==="op_any") kind=pick(["add_same","sub_same","add_diff","sub_diff","mul","div"]);
   // ---- Understanding kinds ----
   if(kind==="name" || kind==="shade" || kind==="build" || kind==="parts"){
     const {num,den}=randFrac();
@@ -1416,7 +1457,8 @@ function genFrac(kind){
     const base=friendlyFrac(5);
     const mult=2+Math.floor(Math.random()*3); // 2..4
     const n2=base.num*mult, d2=base.den*mult;
-    return {kind, visual: twoBarSVG(base.num,base.den, n2,d2),
+    return {kind, num:n2, den:d2, baseNum:base.num, baseDen:base.den,
+      visual: twoBarSVG(base.num,base.den, n2,d2),
       prompt:`Both bars show the same amount! The top is ${base.num}/${base.den}. Type the bottom one.`,
       answer:{num:n2,den:d2}, accept:"exact"};
   }
@@ -1430,7 +1472,7 @@ function genFrac(kind){
   // ---- Simplify: reduce to simplest ----
   if(kind==="simplify"){
     const base=friendlyFrac(8);
-    const mult=2+Math.floor(Math.random()*3);
+    const mult=2+Math.floor(Math.random()*4); // 2..5
     const n=base.num*mult, d=base.den*mult;
     return {kind, num:n, den:d, visual: fracBarSVG(n,d),
       prompt:`Simplify ${n}/${d} to its simplest form.`,
@@ -1446,9 +1488,80 @@ function genFrac(kind){
       prompt:`Is ${n}/${d} already in its simplest form?`,
       answer: (gcd(n,d)===1)?"yes":"no"};
   }
+  // ---- Operations ----
+  if(kind==="add_same"||kind==="sub_same"||kind==="add_diff"||kind==="sub_diff"||kind==="mul"||kind==="div"){
+    return genFracOp(kind);
+  }
   // fallback
   const {num,den}=randFrac();
   return {kind:"name", num, den, visual:fracBarSVG(num,den), prompt:"What fraction is shaded?", answer:{num,den}, accept:"equiv"};
+}
+
+function genFracOp(kind){
+  const small=[2,3,4,5,6];
+  function pf(maxNum,den){ return 1+Math.floor(Math.random()*(den-1)); }
+  let a,b,resN,resD,sym,promptOp;
+  if(kind==="add_same"||kind==="sub_same"){
+    const den=pick([3,4,5,6,8]);
+    let n1=1+Math.floor(Math.random()*(den-1));
+    let n2=1+Math.floor(Math.random()*(den-1));
+    if(kind==="sub_same"){ if(n1<n2){const t=n1;n1=n2;n2=t;} if(n1===n2){ n1=Math.min(den-1,n2+1);} }
+    a={num:n1,den}; b={num:n2,den};
+    sym = kind==="add_same"?"+":"−";
+    resN = kind==="add_same"? n1+n2 : n1-n2; resD=den;
+  } else if(kind==="add_diff"||kind==="sub_diff"){
+    let d1=pick([2,3,4,5]), d2=pick([2,3,4,6]);
+    while(d2===d1) d2=pick([2,3,4,6]);
+    let n1=1+Math.floor(Math.random()*(d1-1));
+    let n2=1+Math.floor(Math.random()*(d2-1));
+    // common denominator
+    const cd=d1*d2/gcd(d1,d2);
+    let cn1=n1*(cd/d1), cn2=n2*(cd/d2);
+    if(kind==="sub_diff" && cn1<cn2){ // ensure positive
+      // swap whole fractions
+      [n1,n2]=[n2,n1]; [d1,d2]=[d2,d1];
+      cn1=n1*(cd/d1); cn2=n2*(cd/d2);
+    }
+    a={num:n1,den:d1}; b={num:n2,den:d2};
+    sym = kind==="add_diff"?"+":"−";
+    resN = kind==="add_diff"? cn1+cn2 : cn1-cn2; resD=cd;
+  } else if(kind==="mul"){
+    const d1=pick([2,3,4,5]), d2=pick([2,3,4,5]);
+    const n1=1+Math.floor(Math.random()*(d1-1)), n2=1+Math.floor(Math.random()*(d2-1));
+    a={num:n1,den:d1}; b={num:n2,den:d2};
+    sym="×"; resN=n1*n2; resD=d1*d2;
+  } else { // div
+    const d1=pick([2,3,4,5]), d2=pick([2,3,4,5]);
+    const n1=1+Math.floor(Math.random()*(d1-1)), n2=1+Math.floor(Math.random()*(d2-1));
+    a={num:n1,den:d1}; b={num:n2,den:d2};
+    sym="÷"; resN=n1*d2; resD=d1*n2; // multiply by reciprocal
+  }
+  return {kind, fracOp:true, a, b, sym,
+    prompt:`${a.num}/${a.den} ${sym} ${b.num}/${b.den} = ?`,
+    visual:`<div style="font-size:40px;font-weight:800;text-align:center;color:var(--gold2)">
+      <span class="fracBig"><span>${a.num}</span><span class="b">${a.den}</span></span>
+      &nbsp;${sym}&nbsp;
+      <span class="fracBig"><span>${b.num}</span><span class="b">${b.den}</span></span></div>`,
+    answer:{num:resN,den:resD}, accept:"equivBonus"};
+}
+// signature of a fraction question, to detect duplicates within one round
+function fracSig(q){
+  if(q.fracOp) return q.kind+":"+q.a.num+"/"+q.a.den+q.sym+q.b.num+"/"+q.b.den;
+  if(q.yesno) return q.kind+":"+q.num+"/"+q.den;
+  if(q.single) return q.kind+":"+q.num+"/"+q.den+":"+(q.prompt.indexOf('top')>=0?'n':'d');
+  return q.kind+":"+q.num+"/"+q.den;
+}
+// build n questions trying hard to avoid repeats; allows repeats only if the pool is exhausted
+function genFracSet(kind, n){
+  const out=[], seen={};
+  let tries=0;
+  while(out.length<n && tries<n*20){
+    const q=genFrac(kind); const sig=fracSig(q); tries++;
+    if(!seen[sig]){ seen[sig]=1; out.push(q); }
+  }
+  // if still short (tiny pool), top up allowing repeats
+  while(out.length<n){ out.push(genFrac(kind)); }
+  return out;
 }
 function fracCorrect(q, gotNum, gotDen){
   if(q.yesno){ return (""+gotNum).toLowerCase()===q.answer; }
@@ -1468,7 +1581,17 @@ function fracCorrect(q, gotNum, gotDen){
     const reduced = gcd(a,b)===1;
     return equal && reduced;
   }
+  if(q.accept==="equivBonus"){
+    // any equivalent correct value is accepted
+    return a*q.answer.den === q.answer.num*b;
+  }
   return a===q.answer.num && b===q.answer.den;
+}
+// did they give it in simplest form? (for the bonus)
+function fracIsSimplest(q, gotNum, gotDen){
+  const a=parseInt(gotNum), b=parseInt(gotDen);
+  if(isNaN(a)||isNaN(b)||b===0) return false;
+  return gcd(a,b)===1;
 }
 /* shared: input UI for a fraction question (handles yes/no, single, fraction) */
 function fracInputHTML(q, ansFn){
