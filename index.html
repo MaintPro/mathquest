@@ -16,14 +16,15 @@
     --r:18px;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;height:100%;}
+  html,body{margin:0;min-height:100%;}
+  html{height:auto;}
   body{
     font-family:'Trebuchet MS','Segoe UI',system-ui,-apple-system,sans-serif;
     background:radial-gradient(1200px 800px at 70% -10%, #1c3a5e 0%, var(--bg) 55%), var(--bg);
-    color:var(--ink); overflow-x:hidden;
+    color:var(--ink); overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch;
     -webkit-user-select:none; user-select:none;
   }
-  .wrap{max-width:680px;margin:0 auto;padding:18px 18px 40px;min-height:100%;}
+  .wrap{max-width:680px;margin:0 auto;padding:18px 18px 80px;min-height:100%;}
   h1,h2,h3{margin:0;font-weight:800;letter-spacing:.3px;}
   .logo{font-size:34px;text-align:center;margin:8px 0 2px;
     background:linear-gradient(90deg,var(--gold),var(--cyan2));
@@ -2782,17 +2783,19 @@ function parentKey(n){
 
 function screenManage(){
   const list=DB.kids.map(k=>`
-    <div class="statline" style="flex-wrap:wrap;gap:6px">
-      <span>${k.avatar} ${esc(k.name)} <span class="muted">· ⭐${k.stars} · 🪙${k.coins||0}</span></span>
-      <span><button class="chip" onclick="togglePin('${k.id}',this)" data-pin="${k.pin}">Show PIN</button>
-      <button class="chip" onclick="changePin('${k.id}')">Change PIN</button>
-      <button class="chip" onclick="resetKid('${k.id}')">Reset</button>
-      <button class="chip" onclick="delKid('${k.id}')">Remove</button></span>
+    <div style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <div style="font-weight:700;margin-bottom:6px">${k.avatar} ${esc(k.name)} <span class="muted" style="font-weight:400">· ⭐${k.stars} · 🪙${k.coins||0}</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <button class="chip" onclick="togglePin('${k.id}',this)" data-pin="${k.pin}">Show PIN</button>
+        <button class="chip" onclick="changePin('${k.id}')">Change PIN</button>
+        <button class="chip" onclick="resetKid('${k.id}')">Reset</button>
+        <button class="chip" onclick="delKid('${k.id}')" style="color:var(--red);border-color:var(--red)">Remove</button>
+      </div>
     </div>`).join("");
   app.innerHTML=`
     <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button><h2>🔓 Parent area</h2></div>
     <div class="card">
-      <h3>Players</h3>
+      <h3>Players (${DB.kids.length})</h3>
       <div style="margin-top:8px">${list||'<p class="muted">No players yet.</p>'}</div>
     </div>
     <div class="card">
@@ -2802,7 +2805,7 @@ function screenManage(){
     </div>
     <div class="card">
       <h3>About</h3>
-      <p class="muted" style="font-size:14px;line-height:1.5">Data is stored only on this device. PINs are hidden by default — tap "Show PIN" to reveal one. Add this page to the home screen for a full-screen, offline app.</p>
+      <p class="muted" style="font-size:14px;line-height:1.5">Players sync across devices. PINs are hidden by default — tap "Show PIN" to reveal one. Add this page to the home screen for a full-screen, offline app.</p>
     </div>`;
 }
 function changePin(id){
@@ -2835,7 +2838,19 @@ function resetAll(){
 function delKid(id){
   const k=DB.kids.find(x=>x.id===id);
   if(!confirm("Remove "+(k?k.name:"this player")+" and ALL their data permanently?")) return;
-  DB.kids=DB.kids.filter(k=>k.id!==id); save(); screenManage();
+  DB.kids=DB.kids.filter(k=>k.id!==id); save();
+  syncDelete(id);   // also remove from the shared sheet so it can't reappear
+  screenManage();
+}
+// tell the sheet to delete this kid (best-effort; safe if the script is the older version)
+function syncDelete(id){
+  try{
+    fetch(SYNC_URL, {
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({_action:"delete", id:id})
+    }).catch(()=>{});
+  }catch(e){}
 }
 
 /* utils */
