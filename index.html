@@ -152,6 +152,7 @@
   .balloon .knot{position:absolute;bottom:-7px;left:50%;width:8px;height:8px;transform:translateX(-50%) rotate(45deg);background:inherit;border-radius:2px}
   .balloon .string{position:absolute;bottom:-46px;left:50%;width:2px;height:42px;background:rgba(255,255,255,.5);transform:translateX(-50%);}
   @keyframes floatUp{ from{bottom:-90px;} to{bottom:115%;} }
+  @keyframes popIn{ 0%{transform:scale(0);opacity:0} 60%{transform:scale(1.25)} 100%{transform:scale(1);opacity:1} }
   .balloon.sway{animation:floatUp var(--dur,5s) linear forwards, sway 2.2s ease-in-out infinite;}
   @keyframes sway{0%,100%{margin-left:0}50%{margin-left:14px}}
   .pop{position:absolute;font-size:34px;animation:popfx .5s ease-out forwards;pointer-events:none}
@@ -253,6 +254,12 @@ function migrateDB(){
     if(!k.facts) k.facts={};
     if(k.stars==null) k.stars=0;
     if(!k.stageSpeed) k.stageSpeed={};  // levelId:stageIdx -> true once speed drill passed
+    if(!k.introSeen) k.introSeen={};
+    // Kids who already cleared any stage in a level have clearly seen the concept —
+    // don't force them to watch the intro (only brand-new learners get gated).
+    ["tables","division"].forEach(lid=>{
+      if(k.stageProgress && k.stageProgress[lid]!=null && k.stageProgress[lid]>=0) k.introSeen[lid]=true;
+    });
   });
   // One-time economy reset: zero all coins when upgrading to the new pricing
   if(DB.econVersion!==2){
@@ -342,6 +349,7 @@ function newKid(name, avatar, pin){
     levelsUnlocked:["tables"],
     stageProgress:{},            // levelId -> index of highest CLEARED stage (-1 = none)
     stageSpeed:{},               // "levelId:stageIdx" -> true once speed drill passed
+    introSeen:{},                // "levelId" -> true once the animated intro is watched
     lessonsSeen:{},              // "levelId:stageIdx" -> true
     belts:{},                    // levelId -> belt index reached
     streak:0,                    // consecutive days
@@ -650,19 +658,29 @@ function screenLevel(){
   const beltIdx=beltFor(k,lv.id);
   const beltName=BELTS[beltIdx], beltCol=BELT_COLORS[beltIdx];
 
+  const hasIntro = (lv.id==="tables"||lv.id==="division");
+  const introSeen = k.introSeen && k.introSeen[lv.id];
+  const introBanner = (hasIntro && !introSeen) ? `
+    <button class="modecard" onclick="startIntro('${lv.id}')" style="background:linear-gradient(180deg,#2a1f4d,#1a1433);border-color:var(--gold)">
+      <span class="ico">🎬</span><span><span class="t">Watch: What is ${lv.id==="tables"?"multiplication":"division"}?</span>
+      <span class="d">A fun 30-second intro — do this first!</span></span></button>` : "";
+  // when intro required and unseen, the stages are gated
+  const stagesGated = hasIntro && !introSeen;
+
   const stageBtns=stages.map((s,i)=>{
     const isCleared = i<=cleared;
     const isCurrent = i===cleared+1;
-    const locked = i>cleared+1;
-    const statusIcon = isCleared?'✅':isCurrent?'▶️':'🔒';
+    const locked = i>cleared+1 || stagesGated;
+    const statusIcon = isCleared?'✅':stagesGated?'🔒':isCurrent?'▶️':'🔒';
     const bg = isCleared?'linear-gradient(180deg,#173a2e,#102a22)'
-              : isCurrent?'linear-gradient(180deg,var(--card),var(--bg2))'
+              : (isCurrent&&!stagesGated)?'linear-gradient(180deg,var(--card),var(--bg2))'
               : 'var(--bg2)';
-    const click = locked?`onclick="toast('Clear the stage before this one first 🔒')"`:`onclick="openStage(${i})"`;
-    return `<button class="modecard" ${click} style="background:${bg};${locked?'opacity:.5':''};${isCurrent?'border-color:var(--gold)':''}">
+    const click = stagesGated?`onclick="toast('Watch the intro first 🎬')"`
+                 : locked?`onclick="toast('Clear the stage before this one first 🔒')"`:`onclick="openStage(${i})"`;
+    return `<button class="modecard" ${click} style="background:${bg};${locked?'opacity:.5':''};${(isCurrent&&!stagesGated)?'border-color:var(--gold)':''}">
       <span class="ico">${statusIcon}</span>
       <span><span class="t">${s.name}</span>
-      <span class="d">${isCleared?'Cleared':isCurrent?'Your next stage — tap to learn & test':'Locked'}</span></span></button>`;
+      <span class="d">${isCleared?'Cleared':(isCurrent&&!stagesGated)?'Your next stage — tap to learn & test':'Locked'}</span></span></button>`;
   }).join("");
 
   app.innerHTML=`
@@ -680,6 +698,7 @@ function screenLevel(){
       <h3 style="margin-bottom:2px">Stages</h3>
       <p class="muted" style="font-size:13px;margin:4px 0 0">Each stage: a quick lesson, then a test. Clear it to unlock the next and climb the belts.</p>
     </div>
+    ${introBanner}
     ${stageBtns}
 
     ${lv.id!=="fractions"?`
@@ -696,6 +715,134 @@ function screenLevel(){
     `:''}
   `;
 }
+
+/* ================= ANIMATED INTRO FLOW ================= */
+function startIntro(levelId){
+  session.intro={levelId, step:0};
+  introStep();
+}
+function introSteps(levelId){
+  if(levelId==="tables"){
+    return [
+      {title:"Equal groups", render:()=>{
+        return mascotSay("Hi! I'm Numbo. Multiplication is just <b>equal groups</b>. Watch!","happy")+
+          introGroupsAnim(3,4,"🧺","🍎")+
+          `<p class="center" style="font-size:17px;margin:10px 0 0">3 baskets · 4 apples each<br><b style="font-size:22px;color:var(--gold2)">3 × 4 = 12</b></p>`;
+      }},
+      {title:"It's repeated adding", render:()=>{
+        return mascotSay("So 3 × 4 is the same as adding 4 three times.","happy")+
+          `<p class="center" style="font-size:20px;margin:16px 0;line-height:1.8">4 + 4 + 4 = <b style="color:var(--gold2)">12</b></p>`+
+          introGroupsAnim(3,4,"🧺","🍎");
+      }},
+      {title:"Arrays — rows & columns", render:()=>{
+        return mascotSay("We can also line them up in a grid — an <b>array</b>. Rows and columns!","happy")+
+          introArrayAnim(3,4)+
+          `<p class="center" style="font-size:17px;margin:10px 0 0">3 rows · 4 in each = <b style="color:var(--gold2)">12</b></p>`;
+      }},
+      {title:"Order doesn't matter!", render:()=>{
+        return mascotSay("Cool trick: flip the array and the total stays the <b>same</b>. So 3×4 = 4×3!","cheer")+
+          `<div style="display:flex;gap:18px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:8px">
+            <div><div class="center muted" style="font-size:13px;margin-bottom:4px">3 × 4</div>${arrayGrid(3,4)}</div>
+            <div style="font-size:28px">=</div>
+            <div><div class="center muted" style="font-size:13px;margin-bottom:4px">4 × 3</div>${arrayGrid(4,3)}</div>
+          </div>`;
+      }}
+    ];
+  }
+  // division
+  return [
+    {title:"Sharing equally", render:()=>{
+      return mascotSay("Hi! I'm Numbo. Division is <b>sharing equally</b>. Let's share cookies!","happy")+
+        introShareAnim(12,3)+
+        `<p class="center" style="font-size:17px;margin:10px 0 0">12 cookies · 3 plates<br><b style="font-size:22px;color:var(--gold2)">12 ÷ 3 = 4 each</b></p>`;
+    }},
+    {title:"How many groups fit?", render:()=>{
+      return mascotSay("Another way: how many groups of 3 fit inside 12?","happy")+
+        introGroupsAnim(4,3,"⭕","🍪")+
+        `<p class="center" style="font-size:17px;margin:10px 0 0">12 cookies, 3 in a group → <b style="color:var(--gold2)">4 groups</b></p>`;
+    }},
+    {title:"Division undoes multiplication", render:()=>{
+      return mascotSay("Here's the secret: division is multiplication <b>backwards</b>.","cheer")+
+        `<div class="card" style="margin-top:8px"><p class="center" style="font-size:19px;line-height:1.9;margin:0">
+          3 × <b style="color:var(--gold2)">4</b> = 12<br>so 12 ÷ 3 = <b style="color:var(--gold2)">4</b></p></div>`+
+        `<p class="center muted" style="font-size:14px;margin-top:10px">If you know your times tables, you already know division!</p>`;
+    }}
+  ];
+}
+function introStep(){
+  const it=session.intro;
+  const steps=introSteps(it.levelId);
+  const s=steps[it.step];
+  const last=it.step===steps.length-1;
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="screenLevel()">✕</button>
+      <span class="pill" style="color:var(--gold)">🎬 ${s.title}</span>
+      <span class="pill">${it.step+1} / ${steps.length}</span></div>
+    <div class="progress"><div style="width:${((it.step+1)/steps.length)*100}%"></div></div>
+    <div class="card" style="padding:16px">${s.render()}</div>
+    <div class="center" style="margin-top:6px">
+      ${last
+        ? `<button class="btn gold" onclick="finishIntro()">Let's go! 🚀</button>`
+        : `<button class="btn gold" onclick="session.intro.step++;introStep()">Next →</button>`}
+    </div>`;
+}
+function finishIntro(){
+  const k=session.kid, it=session.intro;
+  if(!k.introSeen) k.introSeen={};
+  k.introSeen[it.levelId]=true;
+  save(); syncNow();
+  toast("Nice! Now pick your first stage 🌟");
+  screenLevel();
+}
+// animated equal groups: G groups, each with N emoji items
+function introGroupsAnim(G, N, container, item){
+  let groups="";
+  for(let g=0; g<G; g++){
+    let items="";
+    for(let i=0;i<N;i++){
+      const delay=(g*N+i)*0.12;
+      items+=`<span style="display:inline-block;font-size:22px;animation:popIn .4s ${delay}s both">${item}</span>`;
+    }
+    groups+=`<div style="display:inline-flex;flex-direction:column;align-items:center;margin:6px;padding:8px 10px;background:var(--bg2);border:2px solid var(--line);border-radius:14px">
+      <div style="font-size:26px">${container}</div>
+      <div style="max-width:90px;line-height:1.2">${items}</div></div>`;
+  }
+  return `<div style="display:flex;flex-wrap:wrap;justify-content:center;margin:10px 0">${groups}</div>`;
+}
+// animated array build: R rows x C cols of dots
+function introArrayAnim(R,C){
+  let cells="";
+  for(let r=0;r<R;r++) for(let c=0;c<C;c++){
+    const delay=(r*C+c)*0.08;
+    cells+=`<span style="display:inline-block;width:26px;height:26px;margin:3px;border-radius:50%;background:var(--cyan);animation:popIn .35s ${delay}s both"></span>`;
+  }
+  return `<div style="display:grid;grid-template-columns:repeat(${C},32px);justify-content:center;margin:12px auto">${cells}</div>`;
+}
+// static array grid (for the flip comparison)
+function arrayGrid(R,C){
+  let cells="";
+  for(let r=0;r<R;r++) for(let c=0;c<C;c++){
+    cells+=`<span style="display:inline-block;width:20px;height:20px;margin:2px;border-radius:50%;background:var(--gold)"></span>`;
+  }
+  return `<div style="display:grid;grid-template-columns:repeat(${C},24px);justify-content:center">${cells}</div>`;
+}
+// animated sharing: deal `total` cookies into `plates` plates one at a time
+function introShareAnim(total, plates){
+  const per=Math.floor(total/plates);
+  let cols="";
+  for(let p=0;p<plates;p++){
+    let cookies="";
+    for(let i=0;i<per;i++){
+      const dealOrder=i*plates+p; // round-robin dealing
+      cookies+=`<span style="display:block;font-size:22px;animation:popIn .35s ${dealOrder*0.15}s both">🍪</span>`;
+    }
+    cols+=`<div style="display:inline-flex;flex-direction:column;align-items:center;margin:6px">
+      <div style="line-height:1.1">${cookies}</div>
+      <div style="font-size:30px;margin-top:2px">🍽️</div></div>`;
+  }
+  return `<div style="display:flex;justify-content:center;flex-wrap:wrap;margin:10px 0">${cols}</div>`;
+}
+/* ====================================================== */
 
 /* ---- STAGE FLOW: lesson -> test -> advance ---- */
 function openStage(i){
@@ -1477,6 +1624,34 @@ function saveRange(){
 
 /* ================= FRACTIONS: visuals + question engine ================= */
 function gcd(a,b){ return b?gcd(b,a%b):a; }
+/* ================= FRIENDLY INTROS (mascot + animated concept) ================= */
+// Numbo the mascot — a simple friendly drawn character (SVG)
+function mascotSVG(size, mood){
+  size=size||90; mood=mood||"happy";
+  const mouth = mood==="cheer"
+    ? `<path d="M38,58 Q50,72 62,58" fill="#ff7b9c" stroke="#c2425f" stroke-width="2"/>`
+    : `<path d="M40,58 Q50,68 60,58" fill="none" stroke="#1a2a44" stroke-width="3" stroke-linecap="round"/>`;
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,.25))">
+    <circle cx="50" cy="50" r="42" fill="url(#mg)"/>
+    <defs><radialGradient id="mg" cx="40%" cy="35%"><stop offset="0%" stop-color="#5ee0ff"/><stop offset="100%" stop-color="#2b8fd6"/></radialGradient></defs>
+    <circle cx="50" cy="50" r="42" fill="none" stroke="#1a2a44" stroke-width="3"/>
+    <circle cx="37" cy="44" r="9" fill="#fff"/><circle cx="63" cy="44" r="9" fill="#fff"/>
+    <circle cx="39" cy="45" r="4.5" fill="#1a2a44"/><circle cx="65" cy="45" r="4.5" fill="#1a2a44"/>
+    <circle cx="40.5" cy="43.5" r="1.6" fill="#fff"/><circle cx="66.5" cy="43.5" r="1.6" fill="#fff"/>
+    ${mouth}
+    <path d="M30,16 L34,30" stroke="#2b8fd6" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="29" cy="14" r="5" fill="#ffd23f" stroke="#1a2a44" stroke-width="2"/>
+    <circle cx="22" cy="52" r="6" fill="#ff9eb8" opacity="0.6"/><circle cx="78" cy="52" r="6" fill="#ff9eb8" opacity="0.6"/>
+  </svg>`;
+}
+function mascotSay(text, mood){
+  return `<div style="display:flex;align-items:center;gap:12px;justify-content:center;margin:8px 0">
+    <div>${mascotSVG(76,mood)}</div>
+    <div style="background:var(--bg2);border:2px solid var(--line);border-radius:14px;padding:10px 14px;max-width:240px;font-size:14px;line-height:1.4">${text}</div>
+  </div>`;
+}
+/* ============================================================================== */
+
 function fracBarSVG(num, den, w){
   w=w||300; const h=64, seg=w/den;
   let parts="";
