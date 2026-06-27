@@ -238,6 +238,64 @@ function save(){
   }
 }
 
+/* ====================== CLOUD SYNC (Google Apps Script) ====================== */
+const SYNC_URL = "https://script.google.com/macros/s/AKfycbygX7b3uv7IrFiLH7pIQMkVN4vP2Qi_r8ZbmIgG37eB0aJ-O4PWycJp0vs3k34gyIo/exec";
+let _syncQueue = [];   // kid ids waiting to push when offline
+let _online = true;
+
+// stamp a kid as just-modified (used to resolve newest-wins conflicts)
+function stamp(k){ k.updatedAt = Date.now(); }
+
+// Push one kid up to the sheet. Fire-and-forget; queues on failure.
+function syncKid(k){
+  if(!k) return;
+  stamp(k); save();
+  try{
+    fetch(SYNC_URL, {
+      method:"POST",
+      // text/plain avoids a CORS preflight that Apps Script doesn't answer
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify(k)
+    }).then(()=>{ _online=true; flushQueue(); })
+      .catch(()=>{ _online=false; queuePush(k.id); });
+  }catch(e){ queuePush(k.id); }
+}
+function queuePush(id){ if(_syncQueue.indexOf(id)<0) _syncQueue.push(id); }
+function flushQueue(){
+  if(!_syncQueue.length) return;
+  const ids=_syncQueue.slice(); _syncQueue=[];
+  ids.forEach(id=>{ const k=DB.kids.find(x=>x.id===id); if(k) syncKid(k); });
+}
+
+// Pull all kids from the sheet and merge into local DB (newest updatedAt wins).
+function syncPull(cb){
+  let done=false;
+  const finish=()=>{ if(done) return; done=true; cb&&cb(); };
+  try{
+    fetch(SYNC_URL, {method:"GET"})
+      .then(r=>r.json())
+      .then(remote=>{
+        _online=true;
+        if(remote && Array.isArray(remote.kids)){
+          remote.kids.forEach(rk=>{
+            const local=DB.kids.find(x=>x.id===rk.id);
+            if(!local){ DB.kids.push(rk); }
+            else {
+              const lu=local.updatedAt||0, ru=rk.updatedAt||0;
+              if(ru>=lu){ Object.assign(local, rk); }
+            }
+          });
+          migrateDB(); save();
+        }
+        finish();
+      })
+      .catch(()=>{ _online=false; finish(); });
+  }catch(e){ _online=false; finish(); }
+  // safety: don't hang the UI more than 4s waiting on the network
+  setTimeout(finish, 4000);
+}
+/* ============================================================================ */
+
 function newKid(name, avatar, pin){
   return {
     id: Date.now()+""+Math.floor(Math.random()*999),
@@ -333,8 +391,13 @@ function screenProfiles(){
       <p class="center muted" style="margin:6px 0 16px;font-size:14px">Tap your name to start</p>
       <div class="grid3">${kids}${addBtn}</div>
     </div>
-    ${DB.kids.length?`<button class="btn ghost sm" onclick="parentGate()">Parent area</button>`:""}
+    <button class="btn ghost sm" onclick="refreshPlayers(this)">🔄 Refresh players from cloud</button>
+    ${DB.kids.length?`<div style="height:8px"></div><button class="btn ghost sm" onclick="parentGate()">Parent area</button>`:""}
   `;
+}
+function refreshPlayers(btn){
+  if(btn){ btn.textContent="🔄 Refreshing…"; btn.disabled=true; }
+  syncPull(function(){ screenProfiles(); toast("Players updated"); });
 }
 
 function screenAddKid(){
@@ -362,9 +425,13 @@ function saveNewKid(){
   const pin=$("kpin").value.trim();
   if(!name) return toast("Add a name");
   if(!/^\d{4}$/.test(pin)) return toast("PIN must be 4 digits");
-  DB.kids.push(newKid(name, app._av, pin)); save();
+  const nk=newKid(name, app._av, pin);
+  DB.kids.push(nk); save();
+  syncKid(nk);  // push the new player to the shared sheet
   toast("Player created!"); screenProfiles();
 }
+/* push the active kid to the cloud (call at activity checkpoints) */
+function syncNow(){ if(session && session.kid) syncKid(session.kid); }
 
 /* ---- PIN login ---- */
 function enterKid(id){
@@ -415,6 +482,7 @@ function afterLogin(){
 /* ---- Learning path home ---- */
 function screenPath(){
   const k=session.kid;
+  if(k) syncKid(k);  // checkpoint: push progress to the sheet
   const cards = PATH.map(lv=>{
     const unlocked = isUnlocked(k,lv.id);
     const soon = lv.soon && !unlocked;
@@ -808,7 +876,7 @@ function warmEnd(){
   if(prev===yStr) k.streak=(k.streak||0)+1;
   else if(prev!==todayStr()) k.streak=1;
   k.lastWarmup=todayStr();
-  checkStickers(k); save();
+  checkStickers(k); save(); syncNow();
   // auto-suggest the next best thing
   const suggestion = suggestNext(k);
   app.innerHTML=`
@@ -1231,13 +1299,13 @@ function buySticker(id){
   if(ownsSticker(k,id)) return;
   if((k.coins||0)<cost) return toast("Need "+cost+" 🪙 — keep earning!");
   k.coins-=cost; k.shopStickers=k.shopStickers||[]; k.shopStickers.push(id);
-  save(); toast("Unlocked "+s.name+" "+s.emoji+"!"); screenShop();
+  save(); syncNow(); toast("Unlocked "+s.name+" "+s.emoji+"!"); screenShop();
 }
 function buyAvatar(a){
   const k=session.kid;
   if((k.coins||0)<AVATAR_COST) return toast("Need "+AVATAR_COST+" 🪙 — keep practising!");
   k.coins-=AVATAR_COST; k.avatarsOwned=k.avatarsOwned||[]; k.avatarsOwned.push(a);
-  k.avatar=a; save(); toast("Unlocked "+a+"!"); screenShop();
+  k.avatar=a; save(); syncNow(); toast("Unlocked "+a+"!"); screenShop();
 }
 function wearAvatar(a){ const k=session.kid; k.avatar=a; save(); screenShop(); }
 
@@ -1606,11 +1674,11 @@ function resetKidData(k){
 function resetKid(id){
   const k=DB.kids.find(x=>x.id===id); if(!k) return;
   if(!confirm("Reset "+k.name+"'s progress? Stars, coins, belts and stages will be cleared. Name and PIN stay.")) return;
-  resetKidData(k); save(); toast(k.name+"'s progress reset"); screenManage();
+  resetKidData(k); save(); syncKid(k); toast(k.name+"'s progress reset"); screenManage();
 }
 function resetAll(){
   if(!confirm("Reset ALL players' progress? This clears everyone's stars, coins and stages. Names and PINs stay. This cannot be undone.")) return;
-  DB.kids.forEach(resetKidData); save(); toast("All progress reset"); screenManage();
+  DB.kids.forEach(k=>{ resetKidData(k); syncKid(k); }); save(); toast("All progress reset"); screenManage();
 }
 function delKid(id){
   const k=DB.kids.find(x=>x.id===id);
@@ -1623,7 +1691,11 @@ function esc(s){return (s+"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':
 function pick(a){return a[Math.floor(Math.random()*a.length)];}
 
 try {
-  screenProfiles();
+  // show a brief loading screen, pull everyone from the sheet, then render profiles
+  document.getElementById('app').innerHTML =
+    '<div style="padding:60px 24px;text-align:center;color:#8fa6c4;font-family:sans-serif">'+
+    '<div style="font-size:40px;margin-bottom:10px">🔄</div>Loading players…</div>';
+  syncPull(function(){ screenProfiles(); });
 } catch(err) {
   document.getElementById('app').innerHTML =
     '<div style="padding:24px;color:#eaf2ff;font-family:sans-serif">'+
