@@ -154,6 +154,8 @@
   .balloon .string{position:absolute;bottom:-46px;left:50%;width:2px;height:42px;background:rgba(255,255,255,.5);transform:translateX(-50%);}
   @keyframes floatUp{ from{bottom:-90px;} to{bottom:115%;} }
   @keyframes popIn{ 0%{transform:scale(0);opacity:0} 60%{transform:scale(1.25)} 100%{transform:scale(1);opacity:1} }
+  @keyframes dropIn{ 0%{transform:translateY(-40px) scale(.4);opacity:0} 70%{transform:translateY(4px) scale(1.15);opacity:1} 100%{transform:translateY(0) scale(1);opacity:1} }
+  @keyframes flyIn{ 0%{transform:translateY(-60px) rotate(-20deg);opacity:0} 100%{transform:translateY(0) rotate(0);opacity:1} }
   .balloon.sway{animation:floatUp var(--dur,5s) linear forwards, sway 2.2s ease-in-out infinite;}
   @keyframes sway{0%,100%{margin-left:0}50%{margin-left:14px}}
   .pop{position:absolute;font-size:34px;animation:popfx .5s ease-out forwards;pointer-events:none}
@@ -999,8 +1001,8 @@ function introGroupsAnim(G, N, containerEmoji, item, label){
   for(let g=0; g<G; g++){
     let items="";
     for(let i=0;i<N;i++){
-      const delay=(g*N+i)*0.14;
-      items+=`<span style="display:inline-block;font-size:24px;margin:1px;animation:popIn .4s ${delay}s both">${item}</span>`;
+      const delay=0.4 + (g*N+i)*0.4; // slower, clearly one-at-a-time
+      items+=`<span style="display:inline-block;font-size:24px;margin:1px;animation:dropIn .5s ${delay.toFixed(2)}s both">${item}</span>`;
     }
     groups+=`<div style="display:inline-flex;flex-direction:column;align-items:center;margin:6px;padding:10px;
         background:rgba(255,255,255,.04);border:2px dashed var(--gold);border-radius:16px;min-width:84px">
@@ -1014,8 +1016,8 @@ function introGroupsAnim(G, N, containerEmoji, item, label){
 function introArrayAnim(R,C){
   let cells="";
   for(let r=0;r<R;r++) for(let c=0;c<C;c++){
-    const delay=(r*C+c)*0.09;
-    cells+=`<span style="display:inline-block;width:28px;height:28px;margin:3px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8a8a,#e0444b);animation:popIn .35s ${delay}s both"></span>`;
+    const delay=0.3 + (r*C+c)*0.18;
+    cells+=`<span style="display:inline-block;width:28px;height:28px;margin:3px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8a8a,#e0444b);animation:dropIn .45s ${delay.toFixed(2)}s both"></span>`;
   }
   return `<div style="display:grid;grid-template-columns:repeat(${C},34px);justify-content:center;margin:14px auto">${cells}</div>`;
 }
@@ -1027,19 +1029,20 @@ function arrayGrid(R,C){
   }
   return `<div style="display:grid;grid-template-columns:repeat(${C},24px);justify-content:center">${cells}</div>`;
 }
-// animated sharing: deal cookies onto clearly-drawn PLATES one at a time
+// animated sharing: deal cookies onto clearly-drawn PLATES one at a time (cookies DROP in)
 function introShareAnim(total, plates){
   const per=Math.floor(total/plates);
   let cols="";
   for(let p=0;p<plates;p++){
     let cookies="";
     for(let i=0;i<per;i++){
-      const dealOrder=i*plates+p; // round-robin dealing
-      cookies+=`<span style="display:inline-block;font-size:22px;margin:1px;animation:popIn .4s ${dealOrder*0.18}s both">🍪</span>`;
+      const dealOrder=i*plates+p; // round-robin dealing order
+      const delay=0.4 + dealOrder*0.45; // slower, clearly one-at-a-time, starts after a beat
+      cookies+=`<span style="display:inline-block;font-size:22px;margin:1px;animation:dropIn .5s ${delay.toFixed(2)}s both">🍪</span>`;
     }
     cols+=`<div style="display:inline-flex;flex-direction:column;align-items:center;margin:6px">
       <div style="font-size:12px;color:var(--gold2);font-weight:700;margin-bottom:3px">Plate ${p+1}</div>
-      <div style="width:96px;min-height:60px;display:flex;flex-wrap:wrap;justify-content:center;align-content:center;gap:1px;
+      <div style="width:96px;min-height:64px;display:flex;flex-wrap:wrap;justify-content:center;align-content:center;gap:2px;
         background:radial-gradient(circle,#eef3fa,#c9d6e8);border:3px solid #9fb3cc;border-radius:50%;padding:6px;box-shadow:inset 0 2px 6px rgba(0,0,0,.15)">
         ${cookies}</div></div>`;
   }
@@ -1268,24 +1271,78 @@ function stageLesson(){
       <div class="seg" style="margin-top:14px">${[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>`<span class="chip" style="font-size:14px">${s.f*n}÷${s.f}=${n}</span>`).join("")}</div>`;
   }
   k.lessonsSeen[lv.id+":"+st.idx]=true; save();
+  const narration = s.mixed
+    ? `This is the big mix — all of them together! Use the tricks you've learned. You can do it!`
+    : (lv.op==="x"
+        ? `Let's learn the ${s.f} times table! Remember, ${s.f} times a number means ${s.f} added that many times.`
+        : `Let's learn dividing by ${s.f}! Dividing by ${s.f} asks: how many ${s.f}s fit inside?`);
   app.innerHTML=`
-    <div class="topbar"><button class="back" onclick="screenLevel()">‹</button><h2>${s.name}</h2></div>
+    <div class="topbar"><button class="back" onclick="SND.stopSpeech();screenLevel()">‹</button><h2>${s.name}</h2></div>
     <div class="card">
-      <h3>📖 Quick lesson</h3>
+      ${mascotSay("Let's learn <b>"+s.name+"</b>! 🌟","happy")}
+      <h3 style="margin-top:6px">📖 Quick lesson</h3>
       ${body}
+      <div class="center" style="margin-top:10px"><button class="btn ghost sm" onclick="SND.say(${JSON.stringify(narration)})">🔊 Hear it again</button></div>
     </div>
     <div class="card center">
       <p class="muted" style="margin-top:0">Ready? Two gates to clear this stage: <b>1)</b> a 10/10 test, then <b>2)</b> a speed drill (all 10 in time). Slip-ups just get retried.</p>
-      <button class="btn gold" onclick="startStageTest(false)">Start the test</button>
+      <button class="btn gold" onclick="SND.stopSpeech();startStageTest(false)">Start the test</button>
       <div style="height:8px"></div>
-      <button class="btn ghost" onclick="practiceStage()">Practise first (no pressure)</button>
+      <button class="btn ghost" onclick="SND.stopSpeech();practiceStage()">Practise first (no pressure)</button>
       <div style="height:14px"></div>
       <p class="muted" style="font-size:13px;margin:0 0 8px">Finding it tricky? Try the gentle way — pass the test and the stage clears (no speed drill).</p>
-      <button class="btn ghost sm" onclick="startStageTest(true)">🌱 Gentle clear (test only)</button>
+      <button class="btn ghost sm" onclick="SND.stopSpeech();startStageTest(true)">🌱 Gentle clear (test only)</button>
     </div>`;
+  SND.init(); setTimeout(()=>SND.say(narration), 300);
 }
 
 /* ================= FRACTION STAGE FLOW ================= */
+// Bolt's spoken narration for each lesson kind (kept short and lively)
+function lessonNarration(kind, mixed){
+  if(mixed) return "Time to put it all together! Use everything you've learned. You've got this!";
+  const N={
+    // fractions — understanding
+    name:"A fraction shows part of a whole. The bottom tells how many equal parts, the top tells how many we have.",
+    shade:"Count the shaded parts for the top, and all the equal parts for the bottom.",
+    build:"Read the numbers and type the fraction. Top on top, bottom on the bottom.",
+    parts:"The top number is the numerator — the shaded parts. The bottom is the denominator — the total parts.",
+    compare:"To compare fractions, look at how much is shaded. The one that's more filled is bigger!",
+    numline:"A fraction lives on the number line between zero and one. The bottom is how many steps, the top is how far along.",
+    improper:"An improper fraction has a top bigger than its bottom. That means it's more than one whole!",
+    mixed_num:"A mixed number is a whole and a fraction together. Multiply the whole by the bottom, then add the top.",
+    frac_of:"To find a fraction of a number, divide by the bottom, then multiply by the top.",
+    // fractions — equivalent & simplify
+    equiv_see:"Equivalent fractions look different but shade the same amount. Like one half and two quarters!",
+    equiv_make:"To make an equal fraction, multiply the top and the bottom by the same number.",
+    simplify:"To simplify, divide the top and bottom by the same number until it can't go smaller.",
+    simplest:"A fraction is simplest when no number bigger than one divides both the top and bottom.",
+    // factors & multiples
+    factors_of:"A factor divides a number evenly, with nothing left over. Let's find one!",
+    is_factor:"To check a factor, divide and see if there's a remainder. No remainder means yes!",
+    hcf:"The highest common factor is the biggest number that divides into both numbers. It helps you simplify fractions!",
+    multiples_of:"A multiple is what you get when you skip-count. Just like a times table!",
+    is_multiple:"A number is a multiple if you can reach it by skip-counting.",
+    lcm:"The lowest common multiple is the smallest number in both lists. It's the key to adding fractions!",
+    // fraction operations
+    add_same:"When the bottoms are the same, just add the tops and keep the bottom!",
+    sub_same:"When the bottoms match, subtract the tops and keep the bottom.",
+    add_diff:"When bottoms are different, find the L C M, rename both fractions, and remember — the top changes too! Then add the tops.",
+    sub_diff:"Different bottoms? Find the L C M, rename both fractions, change the tops too, then subtract.",
+    mul:"Multiplying is easiest! Just multiply the tops together and the bottoms together.",
+    div:"To divide, keep the first, change the sign, and flip the second. Keep, change, flip!",
+    // decimals & percentages
+    dec_read:"A decimal shows parts of a whole. The first digit after the dot is tenths.",
+    dec_frac:"Decimals and fractions are the same value, just dressed differently. Half is zero point five.",
+    dec_compare:"To compare decimals, line up the dots and compare digit by digit, left to right.",
+    pct_read:"Percent means out of a hundred. Count how many of the hundred squares are shaded.",
+    pct_frac:"A percent is just a fraction out of a hundred. Fifty percent is one half.",
+    pct_of:"To find a percent of a number, turn the percent into a fraction or decimal, then multiply.",
+    convert:"Fractions, decimals and percents are three ways to say the same thing!",
+    word:"Word problems hide the maths in a story. Read carefully, find the numbers, and work it out."
+  };
+  return N[kind] || "Let's learn something new!";
+}
+
 function fracLessonContent(kind){
   if(kind==="name"||kind==="shade"){
     return `<p style="font-size:15px;line-height:1.6">A <b>fraction</b> shows part of a whole. The <b>bottom number (denominator)</b> tells how many equal parts the whole is split into. The <b>top number (numerator)</b> tells how many of those parts we have.</p>
@@ -1452,16 +1509,22 @@ function fracLesson(){
   const body = s.mixed
     ? `<p style="font-size:15px;line-height:1.6">Time to put it all together! You'll see pictures and type the fraction, name how many parts are shaded, and read fractions from bars and circles. Remember: <b>top</b> = shaded parts, <b>bottom</b> = total parts.</p>`
     : fracLessonContent(s.kind);
+  const narration = lessonNarration(s.kind, s.mixed);
   k.lessonsSeen[lv.id+":"+st.idx]=true; save();
   app.innerHTML=`
-    <div class="topbar"><button class="back" onclick="screenLevel()">‹</button><h2>${s.name}</h2></div>
-    <div class="card"><h3>📖 Quick lesson</h3>${body}</div>
+    <div class="topbar"><button class="back" onclick="SND.stopSpeech();screenLevel()">‹</button><h2>${s.name}</h2></div>
+    <div class="card">
+      ${mascotSay("Let's learn <b>"+s.name+"</b>! 🌟","happy")}
+      <h3 style="margin-top:6px">📖 Quick lesson</h3>${body}
+      <div class="center" style="margin-top:10px"><button class="btn ghost sm" onclick="SND.say(lessonNarration('${s.kind}',${!!s.mixed}))">🔊 Hear it again</button></div>
+    </div>
     <div class="card center">
       <p class="muted" style="margin-top:0">Two gates: a 10/10 typing test, then a speed round (type each in time). Or take the gentle route below.</p>
-      <button class="btn gold" onclick="startFracTest(false)">Start the test</button>
+      <button class="btn gold" onclick="SND.stopSpeech();startFracTest(false)">Start the test</button>
       <div style="height:8px"></div>
-      <button class="btn ghost sm" onclick="startFracTest(true)">🌱 Gentle clear</button>
+      <button class="btn ghost sm" onclick="SND.stopSpeech();startFracTest(true)">🌱 Gentle clear</button>
     </div>`;
+  SND.init(); setTimeout(()=>SND.say(narration), 300);
 }
 function startFracTest(gentle){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
