@@ -262,6 +262,9 @@ function migrateDB(){
       if(k.stageProgress && k.stageProgress[lid]!=null && k.stageProgress[lid]>=0) k.introSeen[lid]=true;
     });
   });
+  // Tombstones for deleted players (synced across devices)
+  if(!DB.deletedIds) DB.deletedIds={};
+  DB.kids=(DB.kids||[]).filter(k=>!DB.deletedIds[k.id]);
   // One-time economy reset: zero all coins when upgrading to the new pricing
   if(DB.econVersion!==2){
     (DB.kids||[]).forEach(k=>{ k.coins=0; });
@@ -288,6 +291,7 @@ function stamp(k){ k.updatedAt = Date.now(); }
 // Push one kid up to the sheet. Fire-and-forget; queues on failure.
 function syncKid(k){
   if(!k) return;
+  if(DB.deletedIds && DB.deletedIds[k.id]) return;  // never re-push a deleted player
   stamp(k); save();
   try{
     fetch(SYNC_URL, {
@@ -316,7 +320,18 @@ function syncPull(cb){
       .then(remote=>{
         _online=true;
         if(remote && Array.isArray(remote.kids)){
+          if(!DB.deletedIds) DB.deletedIds={};
+          // 1) pull in the shared tombstone list (the special "__deleted__" row)
+          const tombRow=remote.kids.find(x=>x && x.id==="__deleted__");
+          if(tombRow && tombRow.deletedIds){
+            Object.keys(tombRow.deletedIds).forEach(id=>{
+              if(!DB.deletedIds[id]) DB.deletedIds[id]=tombRow.deletedIds[id];
+            });
+          }
+          // 2) merge real kids, skipping the special row and anything tombstoned
           remote.kids.forEach(rk=>{
+            if(!rk || rk.id==="__deleted__") return;       // skip the tombstone row
+            if(DB.deletedIds[rk.id]) return;               // skip deleted players
             const local=DB.kids.find(x=>x.id===rk.id);
             if(!local){ DB.kids.push(rk); }
             else {
@@ -324,6 +339,8 @@ function syncPull(cb){
               if(ru>=lu){ Object.assign(local, rk); }
             }
           });
+          // 3) drop any local kid that has since been tombstoned (deleted elsewhere)
+          DB.kids=DB.kids.filter(k=>!DB.deletedIds[k.id]);
           migrateDB(); save();
         }
         finish();
@@ -2838,17 +2855,32 @@ function resetAll(){
 function delKid(id){
   const k=DB.kids.find(x=>x.id===id);
   if(!confirm("Remove "+(k?k.name:"this player")+" and ALL their data permanently?")) return;
-  DB.kids=DB.kids.filter(k=>k.id!==id); save();
-  syncDelete(id);   // also remove from the shared sheet so it can't reappear
+  DB.kids=DB.kids.filter(k=>k.id!==id);
+  // record a tombstone so every device knows this kid is deleted and won't re-add it
+  if(!DB.deletedIds) DB.deletedIds={};
+  DB.deletedIds[id]=Date.now();
+  save();
+  syncDelete(id);                 // remove the row from the sheet now
+  syncTombstones();               // publish the tombstone list to the sheet
   screenManage();
 }
-// tell the sheet to delete this kid (best-effort; safe if the script is the older version)
+// tell the sheet to delete this kid's row
 function syncDelete(id){
   try{
     fetch(SYNC_URL, {
       method:"POST",
       headers:{"Content-Type":"text/plain;charset=utf-8"},
       body: JSON.stringify({_action:"delete", id:id})
+    }).catch(()=>{});
+  }catch(e){}
+}
+// store the tombstone list as a special row so other devices can read it
+function syncTombstones(){
+  try{
+    fetch(SYNC_URL, {
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({id:"__deleted__", deletedIds:DB.deletedIds||{}})
     }).catch(()=>{});
   }catch(e){}
 }
