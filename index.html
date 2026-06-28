@@ -406,6 +406,9 @@ function stagesFor(levelId){
   if(levelId==="fractions"){
     return FRACTION_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
   }
+  if(levelId==="factors"){
+    return FACTOR_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
+  }
   if(levelId==="fracops"){
     return FRACOP_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
   }
@@ -427,6 +430,7 @@ const PATH = [
   {id:"tables",   name:"Times Tables", icon:"✖️", op:"x", desc:"Multiplication facts"},
   {id:"division", name:"Division",     icon:"➗", op:"÷", desc:"Sharing and grouping"},
   {id:"fractions",name:"Fractions",    icon:"🍕", op:"f", desc:"Parts of a whole"},
+  {id:"factors",  name:"Factors & Multiples", icon:"🔑", op:"fm", desc:"HCF, LCM — the keys to fractions"},
   {id:"fracops",  name:"Fraction Operations", icon:"🧮", op:"fo", desc:"Add, subtract, multiply, divide"},
   {id:"decimals", name:"Decimals & %", icon:"💯", op:"dp", desc:"Decimals, percentages & word problems"}
 ];
@@ -484,6 +488,19 @@ const FRACTION_STAGES = [
   {id:"simplest",   name:"Is It Simplest?",     kind:"simplest",   desc:"Already simplest? yes/no"},
   // Final
   {id:"mixed",   name:"Fraction Master",   kind:"any",     desc:"All mixed together", mixed:true}
+];
+
+const FACTOR_STAGES = [
+  // Chapter 1 — Factors & HCF
+  {id:"factors_of", name:"Find the Factors", kind:"factors_of", desc:"Numbers that divide evenly"},
+  {id:"is_factor",  name:"Is it a Factor?",  kind:"is_factor",  desc:"Yes or no"},
+  {id:"hcf",        name:"Highest Common Factor", kind:"hcf",   desc:"The biggest shared factor"},
+  // Chapter 2 — Multiples & LCM
+  {id:"multiples_of", name:"List the Multiples", kind:"multiples_of", desc:"Skip-counting"},
+  {id:"is_multiple",  name:"Is it a Multiple?",  kind:"is_multiple",  desc:"Yes or no"},
+  {id:"lcm",          name:"Lowest Common Multiple", kind:"lcm",     desc:"The smallest shared multiple"},
+  // Final
+  {id:"fm_mixed", name:"Factors & Multiples Master", kind:"fm_any", desc:"All mixed", mixed:true}
 ];
 
 const FRACOP_STAGES = [
@@ -1237,7 +1254,7 @@ function openStage(i){
 }
 function stageLesson(){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
-  if(lv.id==="fractions"||lv.id==="fracops"||lv.id==="decimals") return fracLesson();
+  if(lv.id==="fractions"||lv.id==="fracops"||lv.id==="decimals"||lv.id==="factors") return fracLesson();
   let body;
   if(s.mixed){
     body=`<p style="font-size:15px;line-height:1.6">This is the big one — <b>all of them mixed together</b>. No single pattern to lean on; you just need to know your ${lv.name.toLowerCase()}. Take your time, and use the tricks you've learned for each one.</p>
@@ -1358,6 +1375,41 @@ function fracLessonContent(kind){
     return `<p style="font-size:15px;line-height:1.6">Word problems hide the maths in a story. Read carefully, find the numbers, and decide: is it a fraction, a percent, or "how many"?</p>
       <p style="font-size:15px;line-height:1.55;margin:8px 0 0"><b>Example:</b> "Sam ate 3 of 12 slices." → 3/12 = ¼ of the pizza.</p>`;
   }
+  if(kind==="factors_of"){
+    return `<p style="font-size:15px;line-height:1.6">A <b>factor</b> is a number that divides into another number <b>evenly</b> (no remainder).</p>
+      <p style="font-size:15px;text-align:center;margin:12px 0">Factors of <b>12</b>: <b style="color:var(--gold2)">1, 2, 3, 4, 6, 12</b><br>
+      <span class="muted" style="font-size:14px">because 1×12, 2×6, and 3×4 all make 12</span></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Tip: check each number — does it divide in with nothing left over?</p>`;
+  }
+  if(kind==="is_factor"){
+    return `<p style="font-size:15px;line-height:1.6">To check if a number is a factor, divide and see if it's <b>even</b> (no remainder).</p>
+      <p style="font-size:15px;text-align:center;margin:12px 0">Is 4 a factor of 12? &nbsp;12 ÷ 4 = 3 ✅ <b>Yes!</b><br>Is 5 a factor of 12? &nbsp;12 ÷ 5 = 2 r2 ❌ <b>No</b></p>`;
+  }
+  if(kind==="hcf"){
+    return `<p style="font-size:15px;line-height:1.6">The <b>Highest Common Factor (HCF)</b> is the <b>biggest</b> number that is a factor of <b>both</b> numbers.</p>
+      <div style="background:rgba(255,255,255,.04);border:2px solid var(--line);border-radius:12px;padding:12px;margin:12px 0;font-size:14px;line-height:1.7">
+        Factors of 12: 1, 2, 3, <b style="color:var(--gold2)">6</b>, 12<br>
+        Factors of 18: 1, 2, 3, <b style="color:var(--gold2)">6</b>, 9, 18<br>
+        Shared: 1, 2, 3, 6 → biggest is <b style="color:var(--gold2)">6</b></div>
+      <p style="font-size:15px;line-height:1.55;margin:0">HCF helps you <b>simplify</b> fractions.</p>`;
+  }
+  if(kind==="multiples_of"){
+    return `<p style="font-size:15px;line-height:1.6">A <b>multiple</b> is what you get when you <b>skip-count</b> (the answers in a times table).</p>
+      <p style="font-size:15px;text-align:center;margin:12px 0">Multiples of <b>4</b>: <b style="color:var(--gold2)">4, 8, 12, 16, 20 …</b><br>
+      <span class="muted" style="font-size:14px">4×1, 4×2, 4×3, 4×4 …</span></p>`;
+  }
+  if(kind==="is_multiple"){
+    return `<p style="font-size:15px;line-height:1.6">A number is a <b>multiple</b> of another if you can reach it by skip-counting.</p>
+      <p style="font-size:15px;text-align:center;margin:12px 0">Is 12 a multiple of 4? &nbsp;4, 8, <b style="color:var(--gold2)">12</b> ✅ <b>Yes!</b><br>Is 14 a multiple of 4? &nbsp;4, 8, 12, 16 — skipped 14 ❌ <b>No</b></p>`;
+  }
+  if(kind==="lcm"){
+    return `<p style="font-size:15px;line-height:1.6">The <b>Lowest Common Multiple (LCM)</b> is the <b>smallest</b> number that is a multiple of <b>both</b> numbers.</p>
+      <div style="background:rgba(255,255,255,.04);border:2px solid var(--line);border-radius:12px;padding:12px;margin:12px 0;font-size:14px;line-height:1.7">
+        Multiples of 2: 2, 4, <b style="color:var(--gold2)">6</b>, 8 …<br>
+        Multiples of 3: 3, <b style="color:var(--gold2)">6</b>, 9, 12 …<br>
+        First shared one → <b style="color:var(--gold2)">6</b></div>
+      <p style="font-size:15px;line-height:1.55;margin:0"><b>LCM is the key to adding fractions</b> — it's the common bottom!</p>`;
+  }
   if(kind==="add_same"||kind==="sub_same"){
     const op=kind==="add_same"?"add":"subtract";
     const sym=kind==="add_same"?"+":"−";
@@ -1367,9 +1419,19 @@ function fracLessonContent(kind){
   }
   if(kind==="add_diff"||kind==="sub_diff"){
     const sym=kind==="add_diff"?"+":"−";
-    return `<p style="font-size:15px;line-height:1.6">When bottoms are <b>different</b>, first make them the <b>same</b> (a common denominator), then ${kind==="add_diff"?"add":"subtract"} the tops.</p>
-      <p style="font-size:16px;text-align:center;margin:12px 0">½ ${sym} ⅓ → <span class="fracBig"><span>3</span><span class="b">6</span></span> ${sym} <span class="fracBig"><span>2</span><span class="b">6</span></span> = <span class="fracBig"><span>${kind==="add_diff"?5:1}</span><span class="b">6</span></span></p>
-      <p style="font-size:15px;line-height:1.55;margin:0">Tip: multiply the two bottoms (2×3=6) to find a common one.</p>`;
+    const word=kind==="add_diff"?"add":"subtract";
+    const ans=kind==="add_diff"?5:1;
+    return `<p style="font-size:15px;line-height:1.6">When bottoms are <b>different</b>, we rename each fraction so they share the <b>same bottom</b> (the <b>LCM</b> of the two bottoms). Whatever you multiply the bottom by, you <b>must multiply the top by the same number</b>.</p>
+      <div style="background:rgba(255,255,255,.04);border:2px solid var(--line);border-radius:12px;padding:12px;margin:12px 0">
+        <p style="font-size:14px;margin:0 0 8px;text-align:center">LCM of 2 and 3 is <b style="color:var(--gold2)">6</b>. Rename both to sixths:</p>
+        <p style="font-size:15px;text-align:center;margin:6px 0;line-height:2">
+          <span class="fracBig"><span>1</span><span class="b">2</span></span> = <span style="color:var(--gold2)">1×3</span> / <span style="color:var(--gold2)">2×3</span> = <span class="fracBig"><span>3</span><span class="b">6</span></span>
+          &nbsp;&nbsp;&nbsp;
+          <span class="fracBig"><span>1</span><span class="b">3</span></span> = <span style="color:var(--gold2)">1×2</span> / <span style="color:var(--gold2)">3×2</span> = <span class="fracBig"><span>2</span><span class="b">6</span></span></p>
+      </div>
+      <p style="font-size:16px;text-align:center;margin:10px 0">Now ${word} the tops, keep the bottom:<br>
+        <span class="fracBig"><span>3</span><span class="b">6</span></span> ${sym} <span class="fracBig"><span>2</span><span class="b">6</span></span> = <span class="fracBig"><span>${ans}</span><span class="b">6</span></span></p>
+      <p style="font-size:15px;line-height:1.55;margin:0"><b>Remember:</b> the top changes too! ½ became 3/6, not 1/6. Multiply top and bottom by the <b>same</b> number.</p>`;
   }
   if(kind==="mul"){
     return `<p style="font-size:15px;line-height:1.6">Multiplying is the <b>easiest</b>! Just multiply the <b>tops together</b> and the <b>bottoms together</b>.</p>
@@ -2132,6 +2194,7 @@ function genFrac(kind){
   if(kind==="any") kind=pick(["name","shade","build","parts","compare","numline","improper","mixed_num","frac_of","equiv_make","simplify","simplest"]);
   if(kind==="op_any") kind=pick(["add_same","sub_same","add_diff","sub_diff","mul","div"]);
   if(kind==="dp_any") kind=pick(["dec_read","dec_frac","dec_compare","pct_read","pct_frac","pct_of","convert","word"]);
+  if(kind==="fm_any") kind=pick(["factors_of","is_factor","hcf","multiples_of","is_multiple","lcm"]);
   // ---- Understanding kinds ----
   if(kind==="name" || kind==="shade" || kind==="build" || kind==="parts"){
     const {num,den}=randFrac();
@@ -2240,9 +2303,74 @@ function genFrac(kind){
   if(kind==="dec_read"||kind==="dec_frac"||kind==="dec_compare"||kind==="pct_read"||kind==="pct_frac"||kind==="pct_of"||kind==="convert"||kind==="word"){
     return genDecimal(kind);
   }
+  if(kind==="factors_of"||kind==="is_factor"||kind==="hcf"||kind==="multiples_of"||kind==="is_multiple"||kind==="lcm"){
+    return genFactorMultiple(kind);
+  }
   // fallback
   const {num,den}=randFrac();
   return {kind:"name", num, den, visual:fracBarSVG(num,den), prompt:"What fraction is shaded?", answer:{num,den}, accept:"equiv"};
+}
+
+// ---- Factors & Multiples helpers ----
+function factorsOf(n){ const f=[]; for(let i=1;i<=n;i++) if(n%i===0) f.push(i); return f; }
+function hcfOf(a,b){ return gcd(a,b); }
+function lcmOf(a,b){ return a*b/gcd(a,b); }
+function genFactorMultiple(kind){
+  if(kind==="factors_of"){
+    // ask for ONE factor of n (other than 1 and n) — single number, accept any valid factor
+    const n=pick([6,8,9,10,12,14,15,16,18,20,24]);
+    const facs=factorsOf(n).filter(f=>f!==1 && f!==n);
+    return {kind, single:true, factorList:facs, ofNum:n,
+      visual:`<div style="font-size:30px;font-weight:800;text-align:center;color:var(--gold2)">${n}</div>`,
+      prompt:`Type one factor of ${n} (not 1 or ${n}).`,
+      answer:facs[0], acceptAnyOf:facs};
+  }
+  if(kind==="is_factor"){
+    const n=pick([12,15,16,18,20,24,30]);
+    const yes=Math.random()<0.5;
+    let cand;
+    const facs=factorsOf(n), nonFacs=[];
+    for(let i=2;i<n;i++) if(n%i!==0) nonFacs.push(i);
+    cand = yes ? pick(facs.filter(f=>f>1&&f<n)) : pick(nonFacs);
+    return {kind, yesno:true,
+      visual:`<div style="font-size:26px;font-weight:800;text-align:center;color:var(--gold2)">Is ${cand} a factor of ${n}?</div>`,
+      prompt:`Does ${cand} divide ${n} evenly?`,
+      answer: (n%cand===0)?"yes":"no"};
+  }
+  if(kind==="hcf"){
+    const pairs=[[12,18],[8,12],[6,9],[10,15],[16,24],[20,30],[14,21],[9,12],[18,24],[15,20]];
+    const [a,b]=pick(pairs);
+    return {kind, single:true,
+      visual:`<div style="font-size:26px;font-weight:800;text-align:center;color:var(--gold2)">HCF of ${a} and ${b}</div>`,
+      prompt:`What is the highest common factor of ${a} and ${b}?`,
+      answer:hcfOf(a,b), hcfA:a, hcfB:b};
+  }
+  if(kind==="multiples_of"){
+    // ask for the Nth multiple (so there's one answer), e.g. "the 3rd multiple of 4"
+    const base=pick([2,3,4,5,6,7,8]);
+    const which=2+Math.floor(Math.random()*4); // 2nd..5th
+    const ord=["","1st","2nd","3rd","4th","5th"][which];
+    return {kind, single:true,
+      visual:`<div style="font-size:26px;font-weight:800;text-align:center;color:var(--gold2)">${ord} multiple of ${base}</div>`,
+      prompt:`What is the ${ord} multiple of ${base}? (${base}, ${base*2}, ${base*3} …)`,
+      answer:base*which};
+  }
+  if(kind==="is_multiple"){
+    const base=pick([3,4,5,6,7]);
+    const yes=Math.random()<0.5;
+    let cand = yes ? base*(2+Math.floor(Math.random()*6)) : base*(2+Math.floor(Math.random()*6))+pick([1,2]);
+    return {kind, yesno:true,
+      visual:`<div style="font-size:24px;font-weight:800;text-align:center;color:var(--gold2)">Is ${cand} a multiple of ${base}?</div>`,
+      prompt:`Can you reach ${cand} by skip-counting in ${base}s?`,
+      answer: (cand%base===0)?"yes":"no"};
+  }
+  // lcm
+  const pairs=[[2,3],[3,4],[4,6],[2,5],[6,8],[3,5],[4,5],[6,9],[2,7],[3,6],[4,8],[5,10]];
+  const [a,b]=pick(pairs);
+  return {kind, single:true,
+    visual:`<div style="font-size:26px;font-weight:800;text-align:center;color:var(--gold2)">LCM of ${a} and ${b}</div>`,
+    prompt:`What is the lowest common multiple of ${a} and ${b}?`,
+    answer:lcmOf(a,b), lcmA:a, lcmB:b};
 }
 
 // 10x10 grid with `filled` cells shaded (for percent/decimal visuals)
@@ -2416,6 +2544,7 @@ function genFracSet(kind, n){
 function fracCorrect(q, gotNum, gotDen){
   if(q.compare){ return (""+gotNum).toUpperCase()===q.answer; }
   if(q.yesno){ return (""+gotNum).toLowerCase()===q.answer; }
+  if(q.acceptAnyOf){ return q.acceptAnyOf.indexOf(parseInt(gotNum))>=0; }
   if(q.accept==="decimal"){
     const v=parseFloat(gotNum);
     if(isNaN(v)) return false;
@@ -2533,6 +2662,7 @@ function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.rand
 // check a tapped choice value against the question
 function fracChoiceCorrect(q, val){
   if(q.compare||q.yesno) return val===q.answer;
+  if(q.acceptAnyOf) return q.acceptAnyOf.indexOf(parseInt(val))>=0;
   if(q.accept==="decimal") return Math.abs(parseFloat(val)-q.answer.dec)<0.001;
   if(q.single) return parseInt(val)===q.answer;
   const [a,b]=val.split("/").map(Number);
