@@ -545,7 +545,25 @@ const SND = {
   clear(){ this.init(); [523,659,784].forEach((f,i)=>this.tone(f,0.18,'triangle',0.2,i*0.10)); }, // C-E-G
   master(){ this.init(); [523,659,784,1047].forEach((f,i)=>this.tone(f,0.28,'triangle',0.22,i*0.12)); // C-E-G-C fanfare
     [392,523].forEach((f,i)=>this.tone(f,0.3,'sine',0.12,i*0.12)); },
-  coin(){ this.init(); this.tone(988,0.07,'square',0.14); this.tone(1319,0.10,'square',0.12,0.06); }
+  coin(){ this.init(); this.tone(988,0.07,'square',0.14); this.tone(1319,0.10,'square',0.12,0.06); },
+  // spoken narration (built-in voice, offline, no files)
+  say(text){
+    if(this.muted) return;
+    try{
+      if(!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(text);
+      u.rate=0.95; u.pitch=1.15; u.volume=1;   // friendly, slightly higher pitch for kids
+      // prefer a friendly English voice if available
+      const voices=window.speechSynthesis.getVoices();
+      const pref=voices.find(v=>/female|samantha|karen|zira|google uk english female/i.test(v.name))
+              || voices.find(v=>/en-GB|en-AU/i.test(v.lang))
+              || voices.find(v=>/^en/i.test(v.lang));
+      if(pref) u.voice=pref;
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  },
+  stopSpeech(){ try{ if(window.speechSynthesis) window.speechSynthesis.cancel(); }catch(e){} }
 };
 /* ============================================================================== */
 
@@ -750,17 +768,16 @@ function screenLevel(){
   const stageBtns=stages.map((s,i)=>{
     const isCleared = i<=cleared;
     const isCurrent = i===cleared+1;
-    const locked = i>cleared+1 || stagesGated;
-    const statusIcon = isCleared?'✅':stagesGated?'🔒':isCurrent?'▶️':'🔒';
+    const locked = (i>cleared+1 || stagesGated) && !_devMode;  // dev mode opens every stage
+    const statusIcon = isCleared?'✅':_devMode?'🛠️':stagesGated?'🔒':isCurrent?'▶️':'🔒';
     const bg = isCleared?'linear-gradient(180deg,#173a2e,#102a22)'
-              : (isCurrent&&!stagesGated)?'linear-gradient(180deg,var(--card),var(--bg2))'
+              : ((isCurrent&&!stagesGated)||_devMode)?'linear-gradient(180deg,var(--card),var(--bg2))'
               : 'var(--bg2)';
-    const click = stagesGated?`onclick="toast('Watch the intro first 🎬')"`
-                 : locked?`onclick="toast('Clear the stage before this one first 🔒')"`:`onclick="openStage(${i})"`;
-    return `<button class="modecard" ${click} style="background:${bg};${locked?'opacity:.5':''};${(isCurrent&&!stagesGated)?'border-color:var(--gold)':''}">
+    const click = locked?(stagesGated?`onclick="toast('Watch the intro first 🎬')"`:`onclick="toast('Clear the stage before this one first 🔒')"`):`onclick="openStage(${i})"`;
+    return `<button class="modecard" ${click} style="background:${bg};${locked?'opacity:.5':''};${((isCurrent&&!stagesGated)||_devMode)?'border-color:var(--gold)':''}">
       <span class="ico">${statusIcon}</span>
       <span><span class="t">${s.name}</span>
-      <span class="d">${isCleared?'Cleared':(isCurrent&&!stagesGated)?'Your next stage — tap to learn & test':'Locked'}</span></span></button>`;
+      <span class="d">${isCleared?'Cleared':_devMode?'Dev: tap to test':(isCurrent&&!stagesGated)?'Your next stage — tap to learn & test':'Locked'}</span></span></button>`;
   }).join("");
 
   app.innerHTML=`
@@ -804,26 +821,34 @@ function startIntro(levelId){
 function introSteps(levelId){
   if(levelId==="tables"){
     return [
-      {title:"Equal groups", render:()=>{
-        return mascotSay("Hi! I'm Numbo. Multiplication is just <b>equal groups</b>. Watch!","happy")+
-          introGroupsAnim(3,4,"🧺","🍎")+
-          `<p class="center" style="font-size:17px;margin:10px 0 0">3 baskets · 4 apples each<br><b style="font-size:22px;color:var(--gold2)">3 × 4 = 12</b></p>`;
+      {title:"Equal groups",
+       say:"Hi! I'm Numbo. Multiplication means making equal groups. Look — three baskets, and each basket has four apples. Four, plus four, plus four.",
+       render:()=>{
+        return mascotSay("Multiplication means <b>equal groups</b>. Here are <b>3 baskets</b>, each with <b>4 apples</b>! 🍎","happy")+
+          introGroupsAnim(3,4,"🧺","🍎","basket")+
+          `<p class="center" style="font-size:17px;margin:12px 0 0">3 baskets, 4 apples in each<br><b style="font-size:24px;color:var(--gold2)">3 × 4 = 12 apples</b></p>`;
       }},
-      {title:"It's repeated adding", render:()=>{
-        return mascotSay("So 3 × 4 is the same as adding 4 three times.","happy")+
-          `<p class="center" style="font-size:20px;margin:16px 0;line-height:1.8">4 + 4 + 4 = <b style="color:var(--gold2)">12</b></p>`+
-          introGroupsAnim(3,4,"🧺","🍎");
+      {title:"It's repeated adding",
+       say:"So three times four is just adding four, three times. Four plus four plus four equals twelve. That's all multiplication is — fast adding of equal groups!",
+       render:()=>{
+        return mascotSay("3 × 4 is just adding <b>4</b> three times. Counting fast!","happy")+
+          introGroupsAnim(3,4,"🧺","🍎","basket")+
+          `<p class="center" style="font-size:22px;margin:14px 0 0;line-height:1.7">4 + 4 + 4 = <b style="color:var(--gold2)">12</b></p>`;
       }},
-      {title:"Arrays — rows & columns", render:()=>{
-        return mascotSay("We can also line them up in a grid — an <b>array</b>. Rows and columns!","happy")+
+      {title:"Line them up — arrays",
+       say:"We can also line the apples up in a neat grid. Three rows, with four in each row. Count them — still twelve! A grid like this is called an array.",
+       render:()=>{
+        return mascotSay("Now line them in a grid — <b>3 rows</b> of <b>4</b>. This is an <b>array</b>!","happy")+
           introArrayAnim(3,4)+
           `<p class="center" style="font-size:17px;margin:10px 0 0">3 rows · 4 in each = <b style="color:var(--gold2)">12</b></p>`;
       }},
-      {title:"Order doesn't matter!", render:()=>{
-        return mascotSay("Cool trick: flip the array and the total stays the <b>same</b>. So 3×4 = 4×3!","cheer")+
-          `<div style="display:flex;gap:18px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:8px">
+      {title:"A cool trick!",
+       say:"Here's a cool trick. If you flip the grid sideways, the total stays exactly the same. So three times four equals four times three. Learning one fact gives you two!",
+       render:()=>{
+        return mascotSay("Flip the grid — the total stays the <b>same</b>! So 3×4 = 4×3. Two facts for the price of one! 🎉","cheer")+
+          `<div style="display:flex;gap:16px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:10px">
             <div><div class="center muted" style="font-size:13px;margin-bottom:4px">3 × 4</div>${arrayGrid(3,4)}</div>
-            <div style="font-size:28px">=</div>
+            <div style="font-size:28px;color:var(--gold2)">=</div>
             <div><div class="center muted" style="font-size:13px;margin-bottom:4px">4 × 3</div>${arrayGrid(4,3)}</div>
           </div>`;
       }}
@@ -831,21 +856,27 @@ function introSteps(levelId){
   }
   // division
   return [
-    {title:"Sharing equally", render:()=>{
-      return mascotSay("Hi! I'm Numbo. Division is <b>sharing equally</b>. Let's share cookies!","happy")+
+    {title:"Sharing equally",
+     say:"Hi! I'm Numbo. Division means sharing equally. We have twelve cookies and three plates. Let's deal them out, one to each plate, until they're all shared.",
+     render:()=>{
+      return mascotSay("Division means <b>sharing equally</b>. Let's share <b>12 cookies</b> onto <b>3 plates</b> 🍪","happy")+
         introShareAnim(12,3)+
-        `<p class="center" style="font-size:17px;margin:10px 0 0">12 cookies · 3 plates<br><b style="font-size:22px;color:var(--gold2)">12 ÷ 3 = 4 each</b></p>`;
+        `<p class="center" style="font-size:17px;margin:12px 0 0">12 cookies shared onto 3 plates<br><b style="font-size:24px;color:var(--gold2)">12 ÷ 3 = 4 each</b></p>`;
     }},
-    {title:"How many groups fit?", render:()=>{
-      return mascotSay("Another way: how many groups of 3 fit inside 12?","happy")+
-        introGroupsAnim(4,3,"⭕","🍪")+
-        `<p class="center" style="font-size:17px;margin:10px 0 0">12 cookies, 3 in a group → <b style="color:var(--gold2)">4 groups</b></p>`;
+    {title:"Making groups",
+     say:"Another way to think about it: how many groups of three can we make from twelve cookies? Watch — one group, two, three, four. Four groups!",
+     render:()=>{
+      return mascotSay("Another way: how many <b>groups of 3</b> can we make from 12 cookies? Let's bundle them!","happy")+
+        introGroupsAnim(4,3,"🟢","🍪","group")+
+        `<p class="center" style="font-size:17px;margin:12px 0 0">12 cookies, 3 in each group → <b style="color:var(--gold2)">4 groups</b></p>`;
     }},
-    {title:"Division undoes multiplication", render:()=>{
-      return mascotSay("Here's the secret: division is multiplication <b>backwards</b>.","cheer")+
-        `<div class="card" style="margin-top:8px"><p class="center" style="font-size:19px;line-height:1.9;margin:0">
+    {title:"The big secret",
+     say:"And here's the big secret: division is just multiplication backwards. Three times four is twelve. So twelve divided by three is four. If you know your times tables, you already know division!",
+     render:()=>{
+      return mascotSay("The big secret: division is multiplication <b>backwards</b>! 🤫","cheer")+
+        `<div class="card" style="margin-top:10px;border-color:var(--gold)"><p class="center" style="font-size:21px;line-height:2;margin:0">
           3 × <b style="color:var(--gold2)">4</b> = 12<br>so 12 ÷ 3 = <b style="color:var(--gold2)">4</b></p></div>`+
-        `<p class="center muted" style="font-size:14px;margin-top:10px">If you know your times tables, you already know division!</p>`;
+        `<p class="center muted" style="font-size:14px;margin-top:10px">Know your times tables? You already know division! 🌟</p>`;
     }}
   ];
 }
@@ -855,58 +886,68 @@ function introStep(){
   const s=steps[it.step];
   const last=it.step===steps.length-1;
   app.innerHTML=`
-    <div class="qtop"><button class="back" onclick="screenLevel()">✕</button>
+    <div class="qtop"><button class="back" onclick="SND.stopSpeech();screenLevel()">✕</button>
       <span class="pill" style="color:var(--gold)">🎬 ${s.title}</span>
       <span class="pill">${it.step+1} / ${steps.length}</span></div>
     <div class="progress"><div style="width:${((it.step+1)/steps.length)*100}%"></div></div>
     <div class="card" style="padding:16px">${s.render()}</div>
-    <div class="center" style="margin-top:6px">
+    <div class="center" style="margin-top:6px;display:flex;gap:8px;justify-content:center">
+      <button class="btn ghost sm" onclick="SND.say(introCurrentNarration())">🔊 Replay</button>
       ${last
-        ? `<button class="btn gold" onclick="finishIntro()">Let's go! 🚀</button>`
+        ? `<button class="btn gold" onclick="SND.stopSpeech();finishIntro()">Let's go! 🚀</button>`
         : `<button class="btn gold" onclick="session.intro.step++;introStep()">Next →</button>`}
     </div>`;
+  // narrate this step automatically
+  SND.init();
+  setTimeout(()=>SND.say(s.say), 250);
+}
+function introCurrentNarration(){
+  const it=session.intro; const steps=introSteps(it.levelId); return steps[it.step].say;
 }
 function finishIntro(){
   const k=session.kid, it=session.intro;
+  SND.stopSpeech();
   if(!k.introSeen) k.introSeen={};
   k.introSeen[it.levelId]=true;
   save(); syncNow();
   toast("Nice! Now pick your first stage 🌟");
   screenLevel();
 }
-// animated equal groups: G groups, each with N emoji items
-function introGroupsAnim(G, N, container, item){
+// animated equal groups: G groups, each a CLEAR labelled container with N items inside
+function introGroupsAnim(G, N, containerEmoji, item, label){
   let groups="";
   for(let g=0; g<G; g++){
     let items="";
     for(let i=0;i<N;i++){
-      const delay=(g*N+i)*0.12;
-      items+=`<span style="display:inline-block;font-size:22px;animation:popIn .4s ${delay}s both">${item}</span>`;
+      const delay=(g*N+i)*0.14;
+      items+=`<span style="display:inline-block;font-size:24px;margin:1px;animation:popIn .4s ${delay}s both">${item}</span>`;
     }
-    groups+=`<div style="display:inline-flex;flex-direction:column;align-items:center;margin:6px;padding:8px 10px;background:var(--bg2);border:2px solid var(--line);border-radius:14px">
-      <div style="font-size:26px">${container}</div>
-      <div style="max-width:90px;line-height:1.2">${items}</div></div>`;
+    groups+=`<div style="display:inline-flex;flex-direction:column;align-items:center;margin:6px;padding:10px;
+        background:rgba(255,255,255,.04);border:2px dashed var(--gold);border-radius:16px;min-width:84px">
+      <div style="font-size:13px;color:var(--gold2);font-weight:700;margin-bottom:4px">${label} ${g+1}</div>
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;max-width:96px;gap:1px">${items}</div>
+    </div>`;
   }
-  return `<div style="display:flex;flex-wrap:wrap;justify-content:center;margin:10px 0">${groups}</div>`;
+  return `<div style="display:flex;flex-wrap:wrap;justify-content:center;margin:12px 0">${groups}</div>`;
 }
 // animated array build: R rows x C cols of dots
 function introArrayAnim(R,C){
   let cells="";
   for(let r=0;r<R;r++) for(let c=0;c<C;c++){
-    const delay=(r*C+c)*0.08;
-    cells+=`<span style="display:inline-block;width:26px;height:26px;margin:3px;border-radius:50%;background:var(--cyan);animation:popIn .35s ${delay}s both"></span>`;
+    const delay=(r*C+c)*0.09;
+    cells+=`<span style="display:inline-block;width:28px;height:28px;margin:3px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8a8a,#e0444b);animation:popIn .35s ${delay}s both"></span>`;
   }
-  return `<div style="display:grid;grid-template-columns:repeat(${C},32px);justify-content:center;margin:12px auto">${cells}</div>`;
+  return `<div style="display:grid;grid-template-columns:repeat(${C},34px);justify-content:center;margin:14px auto">${cells}</div>`;
 }
 // static array grid (for the flip comparison)
 function arrayGrid(R,C){
   let cells="";
   for(let r=0;r<R;r++) for(let c=0;c<C;c++){
-    cells+=`<span style="display:inline-block;width:20px;height:20px;margin:2px;border-radius:50%;background:var(--gold)"></span>`;
+    cells+=`<span style="display:inline-block;width:20px;height:20px;margin:2px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffe07a,#e0a800)"></span>`;
   }
   return `<div style="display:grid;grid-template-columns:repeat(${C},24px);justify-content:center">${cells}</div>`;
 }
-// animated sharing: deal `total` cookies into `plates` plates one at a time
+// animated sharing: deal cookies onto clearly-drawn PLATES one at a time
 function introShareAnim(total, plates){
   const per=Math.floor(total/plates);
   let cols="";
@@ -914,13 +955,15 @@ function introShareAnim(total, plates){
     let cookies="";
     for(let i=0;i<per;i++){
       const dealOrder=i*plates+p; // round-robin dealing
-      cookies+=`<span style="display:block;font-size:22px;animation:popIn .35s ${dealOrder*0.15}s both">🍪</span>`;
+      cookies+=`<span style="display:inline-block;font-size:22px;margin:1px;animation:popIn .4s ${dealOrder*0.18}s both">🍪</span>`;
     }
     cols+=`<div style="display:inline-flex;flex-direction:column;align-items:center;margin:6px">
-      <div style="line-height:1.1">${cookies}</div>
-      <div style="font-size:30px;margin-top:2px">🍽️</div></div>`;
+      <div style="font-size:12px;color:var(--gold2);font-weight:700;margin-bottom:3px">Plate ${p+1}</div>
+      <div style="width:96px;min-height:60px;display:flex;flex-wrap:wrap;justify-content:center;align-content:center;gap:1px;
+        background:radial-gradient(circle,#eef3fa,#c9d6e8);border:3px solid #9fb3cc;border-radius:50%;padding:6px;box-shadow:inset 0 2px 6px rgba(0,0,0,.15)">
+        ${cookies}</div></div>`;
   }
-  return `<div style="display:flex;justify-content:center;flex-wrap:wrap;margin:10px 0">${cols}</div>`;
+  return `<div style="display:flex;justify-content:center;flex-wrap:wrap;margin:12px 0">${cols}</div>`;
 }
 /* ====================================================== */
 
@@ -2977,6 +3020,8 @@ try {
   // browsers require a user gesture before audio can play — unlock on first tap
   document.addEventListener('pointerdown', function initAudioOnce(){
     SND.init(); if(SND.ctx && SND.ctx.state==='suspended') SND.ctx.resume();
+    // warm up speech voices (some browsers load them async)
+    try{ if(window.speechSynthesis){ window.speechSynthesis.getVoices(); } }catch(e){}
     document.removeEventListener('pointerdown', initAudioOnce);
   }, {once:true});
 } catch(err) {
