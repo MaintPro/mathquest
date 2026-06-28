@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Math Quest</title>
+<title>Nova Minds</title>
 <style>
   :root{
     --bg:#0e1b2c; --bg2:#12243b; --card:#16304d;
@@ -259,6 +259,7 @@ function migrateDB(){
     if(k.stars==null) k.stars=0;
     if(!k.stageSpeed) k.stageSpeed={};  // levelId:stageIdx -> true once speed drill passed
     if(!k.introSeen) k.introSeen={};
+    if(!k.science) k.science={};
     // Kids who already cleared any stage in a level have clearly seen the concept —
     // don't force them to watch the intro (only brand-new learners get gated).
     ["tables","division"].forEach(lid=>{
@@ -371,6 +372,7 @@ function newKid(name, avatar, pin){
     stageProgress:{},            // levelId -> index of highest CLEARED stage (-1 = none)
     stageSpeed:{},               // "levelId:stageIdx" -> true once speed drill passed
     introSeen:{},                // "levelId" -> true once the animated intro is watched
+    science:{},                  // "topicId" -> {explored:true, quizPassed:true}
     lessonsSeen:{},              // "levelId:stageIdx" -> true
     belts:{},                    // levelId -> belt index reached
     streak:0,                    // consecutive days
@@ -430,6 +432,15 @@ const PATH = [
 ];
 function levelById(id){ return PATH.find(l=>l.id===id); }
 function nextLevel(id){ const i=PATH.findIndex(l=>l.id===id); return PATH[i+1]||null; }
+
+/* ================= SCIENCE TOPICS (explore → quiz) ================= */
+const SCIENCE = [
+  {id:"matter", subject:"Physics", name:"States of Matter", icon:"🧊", desc:"Solid, liquid & gas"},
+  {id:"mixing", subject:"Chemistry", name:"Mixing & Materials", icon:"🧪", desc:"Dissolving, floating & mixing"}
+];
+function scienceById(id){ return SCIENCE.find(s=>s.id===id); }
+/* ================================================================== */
+
 let _devMode = false;  // developer-only, runtime, never saved or synced
 function isUnlocked(k,id){ if(_devMode) return true; return (k.levelsUnlocked||["tables"]).includes(id); }
 function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); }
@@ -600,7 +611,7 @@ function screenProfiles(){
     </button>`:"";
   const devBadge = _devMode ? `<div class="center" style="margin:6px 0"><span class="pill" style="color:var(--gold)">🛠️ DEV MODE — all levels unlocked</span></div>` : "";
   app.innerHTML = `
-    <div class="logo" onclick="devTap()">Math Quest<small>LEVEL UP YOUR MATHS</small></div>
+    <div class="logo" onclick="devTap()">Nova Minds<small>LEVEL UP YOUR BRAIN</small></div>
     ${devBadge}
     <div class="card">
       <h2 class="center" style="margin-bottom:4px">Who's playing?</h2>
@@ -717,15 +728,29 @@ function screenPath(){
       ${status}</button>`;
   }).join("");
   const streakBadge = (k.streak||0)>1 ? `<span class="pill" style="color:#ff8a3d">🔥 ${k.streak}</span>` : '';
+  const scienceCards = SCIENCE.map(t=>{
+    const done = k.science && k.science[t.id] && k.science[t.id].quizPassed;
+    const badge = done ? `<span class="lock" style="color:var(--green)">✓ done</span>`
+                       : `<span class="lock" style="color:var(--cyan2)">explore</span>`;
+    return `<button class="modecard" onclick="openScience('${t.id}')">
+      <span class="ico">${t.icon}</span>
+      <span><span class="t">${t.name}</span><span class="d">${t.subject} · ${t.desc}</span></span>
+      ${badge}</button>`;
+  }).join("");
   app.innerHTML=`
     <div class="topbar"><button class="back" onclick="screenProfiles()">‹</button>
       <h2>${k.avatar} ${esc(k.name)}</h2><div class="spacer"></div>
       ${streakBadge}<span class="pill">🪙 ${k.coins||0}</span></div>
     <div class="card" style="padding:14px 18px">
-      <h3 style="margin-bottom:2px">Your learning path</h3>
+      <h3 style="margin-bottom:2px">📐 Maths path</h3>
       <p class="muted" style="font-size:13px;margin:4px 0 0">Climb the stages, earn belts, master each level.</p>
     </div>
     ${cards}
+    <div class="card" style="padding:14px 18px;margin-top:6px">
+      <h3 style="margin-bottom:2px">🔬 Science lab</h3>
+      <p class="muted" style="font-size:13px;margin:4px 0 0">Explore a concept, then test what you learned.</p>
+    </div>
+    ${scienceCards}
     <button class="modecard" onclick="screenShop()">
       <span class="ico">🛍️</span><span><span class="t">Coin shop</span>
       <span class="d">Spend coins on new avatars. You have ${k.coins||0} 🪙.</span></span></button>
@@ -822,7 +847,7 @@ function introSteps(levelId){
   if(levelId==="tables"){
     return [
       {title:"Equal groups",
-       say:"Hi! I'm Numbo. Multiplication means making equal groups. Look — three baskets, and each basket has four apples. Four, plus four, plus four.",
+       say:"Hi! I'm Bolt. Multiplication means making equal groups. Look — three baskets, and each basket has four apples. Four, plus four, plus four.",
        render:()=>{
         return mascotSay("Multiplication means <b>equal groups</b>. Here are <b>3 baskets</b>, each with <b>4 apples</b>! 🍎","happy")+
           introGroupsAnim(3,4,"🧺","🍎","basket")+
@@ -857,7 +882,7 @@ function introSteps(levelId){
   // division
   return [
     {title:"Sharing equally",
-     say:"Hi! I'm Numbo. Division means sharing equally. We have twelve cookies and three plates. Let's deal them out, one to each plate, until they're all shared.",
+     say:"Hi! I'm Bolt. Division means sharing equally. We have twelve cookies and three plates. Let's deal them out, one to each plate, until they're all shared.",
      render:()=>{
       return mascotSay("Division means <b>sharing equally</b>. Let's share <b>12 cookies</b> onto <b>3 plates</b> 🍪","happy")+
         introShareAnim(12,3)+
@@ -966,6 +991,204 @@ function introShareAnim(total, plates){
   return `<div style="display:flex;justify-content:center;flex-wrap:wrap;margin:12px 0">${cols}</div>`;
 }
 /* ====================================================== */
+
+/* ================= SCIENCE: explore → quiz ================= */
+function openScience(id){
+  const k=session.kid, t=scienceById(id);
+  session.science={topic:t};
+  const prog=k.science[id]||{};
+  app.innerHTML=`
+    <div class="topbar"><button class="back" onclick="screenPath()">‹</button><h2>${t.icon} ${t.name}</h2></div>
+    <div class="card"><h3>${t.subject}</h3><p class="muted" style="font-size:14px;margin:6px 0 0">${t.desc}</p></div>
+    <button class="modecard" onclick="startExplore('${id}')">
+      <span class="ico">🔍</span><span><span class="t">Explore</span>
+      <span class="d">${prog.explored?'Explored ✓ — watch again':'Discover how it works with Bolt'}</span></span></button>
+    <button class="modecard" onclick="${prog.explored||_devMode?`startSciQuiz('${id}')`:`toast('Explore first 🔍')`}" style="${prog.explored||_devMode?'':'opacity:.55'}">
+      <span class="ico">📝</span><span><span class="t">Quiz</span>
+      <span class="d">${prog.quizPassed?'Passed ✓ — try again':'Check what you learned (5 questions)'}</span></span></button>`;
+}
+
+/* ---- Explore: multi-step concept walkthrough with narration ---- */
+function scienceExplore(id){
+  if(id==="matter"){
+    return [
+      {title:"Three states", say:"Everything around us is made of tiny particles. Depending on how those particles behave, we get three states: solid, liquid, and gas.",
+       render:()=>mascotSay("Everything is made of tiny <b>particles</b>. How they move makes a <b>solid</b>, a <b>liquid</b>, or a <b>gas</b>!","happy")+threeStatesSVG()},
+      {title:"Solid", say:"In a solid, like ice, the particles are packed tightly together in a neat pattern. They can only wobble in place, so a solid keeps its shape.",
+       render:()=>mascotSay("In a <b>solid</b> (like ice 🧊), particles are packed tight and hold their shape.","happy")+particleBoxSVG("solid")+`<p class="center" style="margin:10px 0 0;font-size:15px">Packed tight · keeps its shape</p>`},
+      {title:"Liquid", say:"Add heat and the ice melts into water. Now the particles have loosened up. They can slide past each other, so a liquid flows and takes the shape of its container.",
+       render:()=>mascotSay("Heat it and it <b>melts</b> to liquid 💧. Particles slide — so it flows and fills any cup.","happy")+particleBoxSVG("liquid")+`<p class="center" style="margin:10px 0 0;font-size:15px">Slides around · flows & pours</p>`},
+      {title:"Gas", say:"Heat it more and the water boils into steam, a gas. Now the particles zoom around freely and spread out to fill all the space they can.",
+       render:()=>mascotSay("Heat more and it <b>boils</b> to gas ☁️. Particles zoom free and fill the whole space!","cheer")+particleBoxSVG("gas")+`<p class="center" style="margin:10px 0 0;font-size:15px">Zooms freely · spreads everywhere</p>`},
+      {title:"Melting & freezing", say:"So heating moves you from solid, to liquid, to gas. And cooling goes back the other way: gas to liquid to solid. We call these melting, boiling, and freezing.",
+       render:()=>mascotSay("<b>Heat</b> → spreads out. <b>Cool</b> → packs together. That's melting, boiling and freezing!","happy")+
+         `<div class="center" style="font-size:17px;margin:14px 0;line-height:1.9">🧊 ice <span style="color:var(--gold2)">— heat →</span> 💧 water <span style="color:var(--gold2)">— heat →</span> ☁️ steam<br><span class="muted" style="font-size:14px">and cooling goes back the other way</span></div>`}
+    ];
+  }
+  // mixing & materials (chemistry)
+  return [
+    {title:"Mixing things", say:"Chemistry is all about what happens when we mix materials together. Some mix completely, and some don't mix at all.",
+     render:()=>mascotSay("Chemistry asks: what happens when we <b>mix</b> things? Let's find out! 🧪","happy")+`<div class="center" style="font-size:46px;margin:14px 0">🧪🥄💧</div>`},
+    {title:"Dissolving", say:"When you stir sugar into water, it seems to disappear. It hasn't vanished — it has dissolved. The sugar breaks into pieces too tiny to see, spread all through the water.",
+     render:()=>mascotSay("Stir sugar into water and it <b>dissolves</b> — it breaks into bits too tiny to see.","happy")+dissolveSVG()+`<p class="center" style="margin:10px 0 0;font-size:15px">Sugar dissolves — it's still there, just hidden!</p>`},
+    {title:"Some don't dissolve", say:"But not everything dissolves. Stir sand into water and it just sinks to the bottom. Sand does not dissolve in water.",
+     render:()=>mascotSay("But <b>sand</b> won't dissolve — it just sinks to the bottom!","happy")+`<div class="center" style="font-size:44px;margin:12px 0">🏖️ + 💧 = 🫙<br><span style="font-size:15px" class="muted">sand sinks — it stays separate</span></div>`},
+    {title:"Float or sink", say:"Materials can also float or sink. Light things for their size, like a cork or wood, float on top. Heavy dense things, like a metal coin, sink.",
+     render:()=>mascotSay("Some things <b>float</b>, some <b>sink</b>! Light-for-their-size things float on top.","happy")+floatSinkSVG()+`<p class="center" style="margin:10px 0 0;font-size:15px">Cork floats 🪵 · coin sinks 🪙</p>`},
+    {title:"Mixing colours", say:"And when we mix some materials, we make something new. Mix red and yellow paint and you get orange! Mixing can create brand new things.",
+     render:()=>mascotSay("Mix some things and you make something <b>new</b> — red + yellow = orange! 🎨","cheer")+
+       `<div class="center" style="font-size:17px;margin:14px 0;line-height:1.9">🔴 + 🟡 = 🟠<br>🔵 + 🟡 = 🟢<br><span class="muted" style="font-size:14px">mixing can make new colours</span></div>`}
+  ];
+}
+function startExplore(id){
+  session.sciEx={id, step:0};
+  sciExStep();
+}
+function sciExStep(){
+  const ex=session.sciEx, steps=scienceExplore(ex.id), s=steps[ex.step], last=ex.step===steps.length-1;
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="SND.stopSpeech();openScience('${ex.id}')">✕</button>
+      <span class="pill" style="color:var(--gold)">🔬 ${s.title}</span>
+      <span class="pill">${ex.step+1} / ${steps.length}</span></div>
+    <div class="progress"><div style="width:${((ex.step+1)/steps.length)*100}%"></div></div>
+    <div class="card" style="padding:16px">${s.render()}</div>
+    <div class="center" style="margin-top:6px;display:flex;gap:8px;justify-content:center">
+      <button class="btn ghost sm" onclick="SND.say(sciExNarration())">🔊 Replay</button>
+      ${last
+        ? `<button class="btn gold" onclick="finishExplore()">I'm ready — quiz me! 📝</button>`
+        : `<button class="btn gold" onclick="session.sciEx.step++;sciExStep()">Next →</button>`}
+    </div>`;
+  SND.init(); setTimeout(()=>SND.say(s.say), 250);
+}
+function sciExNarration(){ const ex=session.sciEx; return scienceExplore(ex.id)[ex.step].say; }
+function finishExplore(){
+  const k=session.kid, ex=session.sciEx;
+  SND.stopSpeech();
+  if(!k.science[ex.id]) k.science[ex.id]={};
+  k.science[ex.id].explored=true; save(); syncNow();
+  startSciQuiz(ex.id);
+}
+
+/* ---- Science quiz: 5 multiple-choice questions ---- */
+function scienceQuiz(id){
+  if(id==="matter"){
+    return [
+      {q:"Which state keeps its own shape?", choices:["Solid","Liquid","Gas"], ans:"Solid"},
+      {q:"In which state do particles zoom around and fill all the space?", choices:["Solid","Liquid","Gas"], ans:"Gas"},
+      {q:"What do we call ice turning into water?", choices:["Melting","Freezing","Boiling"], ans:"Melting"},
+      {q:"A liquid...", choices:["Keeps its shape","Flows and fills its container","Floats away as gas"], ans:"Flows and fills its container"},
+      {q:"What happens when you COOL steam down a lot?", choices:["It becomes liquid, then solid","It stays a gas forever","It disappears"], ans:"It becomes liquid, then solid"}
+    ];
+  }
+  return [
+    {q:"What happens to sugar stirred into water?", choices:["It dissolves","It sinks and stays whole","It floats on top"], ans:"It dissolves"},
+    {q:"Which one does NOT dissolve in water?", choices:["Sand","Sugar","Salt"], ans:"Sand"},
+    {q:"A cork in water will usually...", choices:["Float","Sink","Dissolve"], ans:"Float"},
+    {q:"Red paint + yellow paint makes...", choices:["Orange","Purple","Green"], ans:"Orange"},
+    {q:"When sugar dissolves, it...", choices:["Is still there but hidden","Is gone forever","Turns into water"], ans:"Is still there but hidden"}
+  ];
+}
+function startSciQuiz(id){
+  const qs=scienceQuiz(id).slice();
+  for(let i=qs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [qs[i],qs[j]]=[qs[j],qs[i]]; }
+  qs.forEach(q=>{ q.shuffled=q.choices.slice().sort(()=>Math.random()-.5); });
+  session.sciQuiz={id, qs, idx:0, correct:0, locked:false};
+  sciQuizNext();
+}
+function sciQuizNext(){
+  const Q=session.sciQuiz;
+  if(Q.idx>=Q.qs.length) return sciQuizEnd();
+  Q.locked=false;
+  const q=Q.qs[Q.idx];
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="openScience('${Q.id}')">✕</button>
+      <span class="pill" style="color:var(--gold)">📝 Quiz</span>
+      <span class="pill">${Q.idx+1} / ${Q.qs.length}</span></div>
+    <div class="progress"><div style="width:${(Q.idx/Q.qs.length)*100}%"></div></div>
+    <div class="question" style="margin:16px 0">${q.q}</div>
+    <div class="opts" style="flex-direction:column;gap:8px">
+      ${q.shuffled.map(c=>`<button class="opt" style="width:100%" onclick="sciQuizAns(this,'${c.replace(/'/g,"\\'")}')">${c}</button>`).join("")}
+    </div>
+    <div class="feedback" id="fb"></div>`;
+}
+function sciQuizAns(el,val){
+  const k=session.kid, Q=session.sciQuiz, q=Q.qs[Q.idx];
+  if(Q.locked) return; Q.locked=true;
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+  const fb=$("fb");
+  if(val===q.ans){
+    el.classList.add("good"); fb.textContent="Correct! 🎉"; fb.className="feedback good";
+    Q.correct++; k.stars++; k.coins=(k.coins||0)+1; SND.correct();
+  } else {
+    el.classList.add("bad"); SND.wrong();
+    document.querySelectorAll('.opt').forEach(b=>{ if(b.textContent===q.ans) b.classList.add("good"); });
+    fb.textContent="Answer: "+q.ans; fb.className="feedback bad";
+  }
+  save(); Q.idx++;
+  setTimeout(()=>sciQuizNext(), 1200);
+}
+function sciQuizEnd(){
+  const k=session.kid, Q=session.sciQuiz;
+  const passed=Q.correct>=4; // 4/5 to pass
+  if(passed){
+    if(!k.science[Q.id]) k.science[Q.id]={};
+    if(!k.science[Q.id].quizPassed){ k.coins=(k.coins||0)+5; } // first-pass bonus
+    k.science[Q.id].quizPassed=true; save(); syncNow(); SND.master();
+  }
+  app.innerHTML=`
+    <div class="card center" style="border-color:${passed?'var(--green)':'var(--gold)'}">
+      <div style="font-size:48px">${passed?'🎉🔬':'💪'}</div>
+      <h2>${Q.correct} / ${Q.qs.length}</h2>
+      <p class="muted">${passed?'You passed! Great science brain. 🌟'+((k.science[Q.id]&&k.science[Q.id].quizPassed)?' +5 🪙':''):'So close! Explore again and retry.'}</p>
+    </div>
+    <div class="card center">
+      ${passed?'':`<button class="btn gold" onclick="startExplore('${Q.id}')">🔍 Explore again</button><div style="height:8px"></div>`}
+      <button class="btn ${passed?'gold':'ghost'}" onclick="openScience('${Q.id}')">Back to topic</button>
+      <div style="height:8px"></div>
+      <button class="btn ghost" onclick="screenPath()">Home</button>
+    </div>`;
+}
+
+/* ---- Science explore visuals (SVG, particle models) ---- */
+function particleBoxSVG(state){
+  const box=`<rect x="2" y="2" width="196" height="116" rx="10" fill="rgba(255,255,255,.03)" stroke="var(--line)" stroke-width="2"/>`;
+  let dots="";
+  if(state==="solid"){
+    for(let r=0;r<4;r++) for(let c=0;c<6;c++){
+      dots+=`<circle cx="${40+c*24}" cy="${28+r*22}" r="8" fill="#5ee0ff" stroke="#16284a" stroke-width="1.5"/>`;
+    }
+  } else if(state==="liquid"){
+    const pts=[[40,80],[64,90],[90,78],[116,92],[142,82],[160,92],[52,60],[88,58],[126,62],[150,60],[70,40],[120,42]];
+    pts.forEach(p=>{ dots+=`<circle cx="${p[0]}" cy="${p[1]}" r="8" fill="#3ddc97" stroke="#16284a" stroke-width="1.5"/>`; });
+  } else { // gas
+    const pts=[[30,30],[160,26],[90,50],[50,90],[170,95],[120,80],[70,20],[140,55],[100,105],[35,60]];
+    pts.forEach(p=>{ dots+=`<circle cx="${p[0]}" cy="${p[1]}" r="8" fill="#ff9eb8" stroke="#16284a" stroke-width="1.5"/>`; });
+  }
+  return `<div class="center" style="margin:8px 0"><svg viewBox="0 0 200 120" width="100%" style="max-width:320px">${box}${dots}</svg></div>`;
+}
+function threeStatesSVG(){
+  return `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0">
+    <div style="text-align:center"><div style="font-size:34px">🧊</div><div class="muted" style="font-size:13px">Solid</div></div>
+    <div style="text-align:center"><div style="font-size:34px">💧</div><div class="muted" style="font-size:13px">Liquid</div></div>
+    <div style="text-align:center"><div style="font-size:34px">☁️</div><div class="muted" style="font-size:13px">Gas</div></div>
+  </div>`;
+}
+function dissolveSVG(){
+  return `<div class="center" style="font-size:17px;margin:12px 0;line-height:1.8">
+    🥄 sugar + 💧 water<br><span style="font-size:26px">→ 🫙 ✨</span><br>
+    <span class="muted" style="font-size:14px">clear water — sugar is dissolved</span></div>`;
+}
+function floatSinkSVG(){
+  return `<div class="center" style="margin:10px 0"><svg viewBox="0 0 200 120" width="100%" style="max-width:300px">
+    <rect x="10" y="40" width="180" height="74" rx="8" fill="rgba(94,224,255,.15)" stroke="#3aa0d0" stroke-width="2"/>
+    <line x1="10" y1="48" x2="190" y2="48" stroke="#7fe9ff" stroke-width="2"/>
+    <text x="60" y="40" font-size="22" text-anchor="middle">🪵</text>
+    <text x="60" y="34" font-size="11" fill="#8fa6c4" text-anchor="middle">floats</text>
+    <text x="140" y="100" font-size="20" text-anchor="middle">🪙</text>
+    <text x="140" y="115" font-size="11" fill="#8fa6c4" text-anchor="middle">sinks</text>
+  </svg></div>`;
+}
+/* ========================================================== */
 
 /* ---- STAGE FLOW: lesson -> test -> advance ---- */
 function openStage(i){
@@ -1764,23 +1987,24 @@ function saveRange(){
 /* ================= FRACTIONS: visuals + question engine ================= */
 function gcd(a,b){ return b?gcd(b,a%b):a; }
 /* ================= FRIENDLY INTROS (mascot + animated concept) ================= */
-// Numbo the mascot — a simple friendly drawn character (SVG)
+// Bolt the mascot — a friendly spark character with a lightning antenna (SVG)
 function mascotSVG(size, mood){
   size=size||90; mood=mood||"happy";
   const mouth = mood==="cheer"
     ? `<path d="M38,58 Q50,72 62,58" fill="#ff7b9c" stroke="#c2425f" stroke-width="2"/>`
     : `<path d="M40,58 Q50,68 60,58" fill="none" stroke="#1a2a44" stroke-width="3" stroke-linecap="round"/>`;
-  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,.25))">
-    <circle cx="50" cy="50" r="42" fill="url(#mg)"/>
-    <defs><radialGradient id="mg" cx="40%" cy="35%"><stop offset="0%" stop-color="#5ee0ff"/><stop offset="100%" stop-color="#2b8fd6"/></radialGradient></defs>
-    <circle cx="50" cy="50" r="42" fill="none" stroke="#1a2a44" stroke-width="3"/>
-    <circle cx="37" cy="44" r="9" fill="#fff"/><circle cx="63" cy="44" r="9" fill="#fff"/>
-    <circle cx="39" cy="45" r="4.5" fill="#1a2a44"/><circle cx="65" cy="45" r="4.5" fill="#1a2a44"/>
-    <circle cx="40.5" cy="43.5" r="1.6" fill="#fff"/><circle cx="66.5" cy="43.5" r="1.6" fill="#fff"/>
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" style="filter:drop-shadow(0 4px 10px rgba(110,180,255,.35))">
+    <defs><radialGradient id="mg" cx="40%" cy="35%"><stop offset="0%" stop-color="#7fe9ff"/><stop offset="60%" stop-color="#34b6f0"/><stop offset="100%" stop-color="#2b6fd6"/></radialGradient></defs>
+    <circle cx="50" cy="52" r="40" fill="url(#mg)"/>
+    <circle cx="50" cy="52" r="40" fill="none" stroke="#16284a" stroke-width="3"/>
+    <circle cx="38" cy="46" r="9" fill="#fff"/><circle cx="62" cy="46" r="9" fill="#fff"/>
+    <circle cx="40" cy="47" r="4.5" fill="#16284a"/><circle cx="64" cy="47" r="4.5" fill="#16284a"/>
+    <circle cx="41.5" cy="45.5" r="1.6" fill="#fff"/><circle cx="65.5" cy="45.5" r="1.6" fill="#fff"/>
     ${mouth}
-    <path d="M30,16 L34,30" stroke="#2b8fd6" stroke-width="4" stroke-linecap="round"/>
-    <circle cx="29" cy="14" r="5" fill="#ffd23f" stroke="#1a2a44" stroke-width="2"/>
-    <circle cx="22" cy="52" r="6" fill="#ff9eb8" opacity="0.6"/><circle cx="78" cy="52" r="6" fill="#ff9eb8" opacity="0.6"/>
+    <!-- lightning bolt antenna -->
+    <path d="M50,14 L44,12" stroke="#34b6f0" stroke-width="3" stroke-linecap="round"/>
+    <path d="M52,2 L46,12 L51,12 L45,22 L58,9 L52,9 Z" fill="#ffd23f" stroke="#16284a" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle cx="24" cy="54" r="6" fill="#ff9eb8" opacity="0.55"/><circle cx="76" cy="54" r="6" fill="#ff9eb8" opacity="0.55"/>
   </svg>`;
 }
 function mascotSay(text, mood){
