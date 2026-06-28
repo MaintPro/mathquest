@@ -196,7 +196,10 @@ function coinsForSpeed(sec){
 }
 function award(k, correct, coins){
   // correct answer: 1 star always; coins default 1, or a scaled amount in speed drills
-  if(correct){ k.stars++; k.coins=(k.coins||0)+(coins!=null?coins:1); }
+  if(correct){
+    k.stars++; k.coins=(k.coins||0)+(coins!=null?coins:1);
+    if(coins && coins>=3) SND.coin(); else SND.correct();
+  }
 }
 const SHOP_AVATARS = ["🐵","🐰","🐺","🦝","🐹","🐱","🐮","🐷","🐗","🦔","🐭","🐔","🦇","🦅","🦈","🐊"];
 const AVATAR_COST = 100;
@@ -427,7 +430,8 @@ const PATH = [
 ];
 function levelById(id){ return PATH.find(l=>l.id===id); }
 function nextLevel(id){ const i=PATH.findIndex(l=>l.id===id); return PATH[i+1]||null; }
-function isUnlocked(k,id){ return (k.levelsUnlocked||["tables"]).includes(id); }
+let _devMode = false;  // developer-only, runtime, never saved or synced
+function isUnlocked(k,id){ if(_devMode) return true; return (k.levelsUnlocked||["tables"]).includes(id); }
 function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); }
 
 /* Retroactively unlock any level whose PREVIOUS level is fully mastered.
@@ -501,6 +505,62 @@ let session = {}; // active kid + quiz state
 const $ = id => document.getElementById(id);
 const app = $("app");
 
+/* ================= SOUND ENGINE (synthesised, no files, offline) ================= */
+const SND = {
+  ctx:null, muted:false,
+  init(){
+    if(this.ctx) return;
+    try{ this.ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ this.ctx=null; }
+    this.muted = (localStorage.getItem('mq_muted')==='1');
+  },
+  setMuted(m){ this.muted=m; try{ localStorage.setItem('mq_muted', m?'1':'0'); }catch(e){} },
+  // play a single tone
+  tone(freq, dur, type, vol, when){
+    if(!this.ctx || this.muted) return;
+    const t=this.ctx.currentTime+(when||0);
+    const o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type=type||'sine'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol||0.2, t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.ctx.destination);
+    o.start(t); o.stop(t+dur+0.02);
+  },
+  // a quick noise burst (for balloon pop)
+  noise(dur, vol){
+    if(!this.ctx || this.muted) return;
+    const t=this.ctx.currentTime;
+    const n=Math.floor(this.ctx.sampleRate*dur);
+    const buf=this.ctx.createBuffer(1,n,this.ctx.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<n;i++){ d[i]=(Math.random()*2-1)*(1-i/n); }
+    const s=this.ctx.createBufferSource(); s.buffer=buf;
+    const g=this.ctx.createGain(); g.gain.value=vol||0.3;
+    s.connect(g); g.connect(this.ctx.destination); s.start(t);
+  },
+  pop(){ this.init(); this.noise(0.09,0.25); this.tone(420,0.08,'triangle',0.18); },
+  correct(){ this.init(); this.tone(660,0.10,'sine',0.2); this.tone(880,0.12,'sine',0.18,0.09); },
+  wrong(){ this.init(); this.tone(200,0.18,'sawtooth',0.14); },
+  tap(){ this.init(); this.tone(520,0.05,'square',0.10); },
+  clear(){ this.init(); [523,659,784].forEach((f,i)=>this.tone(f,0.18,'triangle',0.2,i*0.10)); }, // C-E-G
+  master(){ this.init(); [523,659,784,1047].forEach((f,i)=>this.tone(f,0.28,'triangle',0.22,i*0.12)); // C-E-G-C fanfare
+    [392,523].forEach((f,i)=>this.tone(f,0.3,'sine',0.12,i*0.12)); },
+  coin(){ this.init(); this.tone(988,0.07,'square',0.14); this.tone(1319,0.10,'square',0.12,0.06); }
+};
+/* ============================================================================== */
+
+let _devTaps=0, _devTimer=null;
+function devTap(){
+  _devTaps++;
+  clearTimeout(_devTimer);
+  _devTimer=setTimeout(()=>{ _devTaps=0; }, 1500); // taps must be quick succession
+  if(_devTaps>=7){
+    _devTaps=0; _devMode=!_devMode;
+    SND.init(); SND.tap();
+    toast(_devMode?"🛠️ Developer mode ON — all levels unlocked (this device only)":"Developer mode off");
+    if(typeof screenProfiles==='function') screenProfiles();
+  }
+}
 function toast(msg){
   const t=$("toast"); t.textContent=msg; t.classList.add("show");
   clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),1600);
@@ -515,13 +575,15 @@ function screenProfiles(){
       <div class="name">${esc(k.name)}</div>
       <div class="stars">⭐ ${k.stars}</div>
     </button>`).join("");
-  const addBtn = DB.kids.length<6 ? `
+  const addBtn = DB.kids.length<20 ? `
     <button class="kid add" onclick="screenAddKid()">
       <div class="avatar">＋</div><div class="name">Add player</div>
-      <div class="stars muted">up to 6</div>
+      <div class="stars muted">add more</div>
     </button>`:"";
+  const devBadge = _devMode ? `<div class="center" style="margin:6px 0"><span class="pill" style="color:var(--gold)">🛠️ DEV MODE — all levels unlocked</span></div>` : "";
   app.innerHTML = `
-    <div class="logo">Math Quest<small>LEVEL UP YOUR MATHS</small></div>
+    <div class="logo" onclick="devTap()">Math Quest<small>LEVEL UP YOUR MATHS</small></div>
+    ${devBadge}
     <div class="card">
       <h2 class="center" style="margin-bottom:4px">Who's playing?</h2>
       <p class="center muted" style="margin:6px 0 16px;font-size:14px">Tap your name to start</p>
@@ -683,7 +745,7 @@ function screenLevel(){
       <span class="ico">🎬</span><span><span class="t">Watch: What is ${lv.id==="tables"?"multiplication":"division"}?</span>
       <span class="d">A fun 30-second intro — do this first!</span></span></button>` : "";
   // when intro required and unseen, the stages are gated
-  const stagesGated = hasIntro && !introSeen;
+  const stagesGated = hasIntro && !introSeen && !_devMode;
 
   const stageBtns=stages.map((s,i)=>{
     const isCleared = i<=cleared;
@@ -1082,7 +1144,7 @@ function fracTestAns(yn){
     else { fb.textContent="Correct! 🎉"; award(k,true); }
     fb.className="feedback good"; t.correct++;
   } else {
-    fb.textContent="Answer: "+fracAnswerShown(q); fb.className="feedback bad"; t.missed.push(q);
+    fb.textContent="Answer: "+fracAnswerShown(q); fb.className="feedback bad"; SND.wrong(); t.missed.push(q);
   }
   t.idx++; save();
   setTimeout(()=>{ t.locked=false; fracTestNext(); }, 1300);
@@ -1169,7 +1231,7 @@ function fracSpeedTimeout(){
   if(fp.timer){ clearInterval(fp.timer); fp.timer=null; }
   fp.missed.push(q);
   document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
-  const fb=$("fb"); if(fb){ fb.textContent="Too slow! Answer: "+fracAnswerShown(q); fb.className="feedback bad"; }
+  const fb=$("fb"); if(fb){ fb.textContent="Too slow! Answer: "+fracAnswerShown(q); fb.className="feedback bad"; } SND.wrong();
   fp.idx++;
   setTimeout(()=>fracSpeedNext(),1200);
 }
@@ -1185,7 +1247,7 @@ function fracSpeedPick(val){
     if(fb){ fb.textContent="⚡ In time! +"+cn+" 🪙"; fb.className="feedback good"; }
     fp.correct++; award(k,true,cn);
   } else {
-    if(fb){ fb.textContent="Answer: "+fracAnswerShown(q); fb.className="feedback bad"; }
+    if(fb){ fb.textContent="Answer: "+fracAnswerShown(q); fb.className="feedback bad"; } SND.wrong();
     fp.missed.push(q);
   }
   fp.idx++; save();
@@ -1222,12 +1284,25 @@ function startStageTest(gentle){
 function stageTestBuild(fresh){
   const k=session.kid, t=session.stest, s=t.stage.def, lv=t.lv;
   if(fresh){
-    t.queue=[];
-    for(let i=0;i<10;i++){ session.q={op:lv.op, fixed:s.mixed?null:s.f}; t.queue.push(genQ(k)); }
-    session.q=null;
+    t.queue=genDistinctQs(k, lv.op, s.mixed?null:s.f, 10);
   } else { t.queue=t.missed.slice(); }
   t.idx=0; t.correct=0; t.total=t.queue.length; t.missed=[]; t.locked=false;
   stageTestNext();
+}
+// generate n questions with no repeated fact within the set (different every attempt & device)
+function genDistinctQs(k, op, fixed, n){
+  const out=[], seen={};
+  let tries=0;
+  while(out.length<n && tries<n*30){
+    session.q={op, fixed}; const q=genQ(k); tries++;
+    if(!seen[q.key]){ seen[q.key]=1; out.push(q); }
+  }
+  // small fact spaces (e.g. a single table has 12 facts) — top up allowing repeats if needed
+  while(out.length<n){ session.q={op, fixed}; out.push(genQ(k)); }
+  session.q=null;
+  // shuffle so order differs each time too
+  for(let i=out.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [out[i],out[j]]=[out[j],out[i]]; }
+  return out;
 }
 function stageTestNext(){
   const t=session.stest;
@@ -1250,7 +1325,7 @@ function stageTestAns(el,val){
   const fb=$("fb");
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
   if(val===c.ans){ el.classList.add("good"); fb.textContent="Correct!"; fb.className="feedback good"; t.correct++; award(k,true); }
-  else { el.classList.add("bad"); f.wrong++; t.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
+  else { el.classList.add("bad"); f.wrong++; SND.wrong(); t.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
   t.idx++; save();
   setTimeout(()=>{ t.locked=false; stageTestNext(); }, val===c.ans?550:1150);
 }
@@ -1304,9 +1379,7 @@ function startStageSpeed(){
 function stageSpeedBuild(fresh){
   const k=session.kid, sp=session.sspeed, s=sp.stage.def, lv=sp.lv;
   if(fresh){
-    sp.queue=[];
-    for(let i=0;i<10;i++){ session.q={op:lv.op, fixed:s.mixed?null:s.f}; sp.queue.push(genQ(k)); }
-    session.q=null;
+    sp.queue=genDistinctQs(k, lv.op, s.mixed?null:s.f, 10);
   } else { sp.queue=sp.missed.slice(); }
   sp.idx=0; sp.correct=0; sp.total=sp.queue.length; sp.missed=[]; sp.locked=false;
   stageSpeedNext();
@@ -1341,7 +1414,7 @@ function stageSpeedTimeout(){
   if(sp.timer){ clearInterval(sp.timer); sp.timer=null; }
   document.querySelectorAll('.opt').forEach(b=>{ b.disabled=true; if(+b.textContent===c.ans) b.classList.add("good"); });
   sp.missed.push(c);
-  const fb=$("fb"); if(fb){ fb.textContent="Too slow! "+c.prompt+" = "+c.ans; fb.className="feedback bad"; }
+  const fb=$("fb"); if(fb){ fb.textContent="Too slow! "+c.prompt+" = "+c.ans; fb.className="feedback bad"; } SND.wrong();
   sp.idx++;
   setTimeout(()=>stageSpeedNext(),1200);
 }
@@ -1353,7 +1426,7 @@ function stageSpeedAns(el,val){
   const fb=$("fb");
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
   if(val===c.ans){ el.classList.add("good"); const cn=coinsForSpeed(sp.speedSec); if(fb){fb.textContent="⚡ In time! +"+cn+" 🪙"; fb.className="feedback good";} sp.correct++; award(k,true,cn); }
-  else { el.classList.add("bad"); f.wrong++; sp.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); if(fb){fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad";} }
+  else { el.classList.add("bad"); f.wrong++; SND.wrong(); sp.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); if(fb){fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad";} }
   sp.idx++; save();
   setTimeout(()=>stageSpeedNext(), val===c.ans?500:1100);
 }
@@ -1397,6 +1470,7 @@ function clearStageNow(k, lv, st, gentle){
   }
   k.history.push({date:Date.now(), mode:'stage', topic:lv.name+" "+st.def.name, score:10, total:10, timeSec:0});
   const unlocked=checkStickers(k); save(); syncNow();
+  if(levelDone) SND.master(); else SND.clear();
   const stages=stagesFor(lv.id);
   const nextStage=stages[st.idx+1];
   app.innerHTML=`
@@ -1464,7 +1538,7 @@ function warmAns(el,val){
   document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
   const fb=$("fb");
   if(val===c.ans){ el.classList.add("good"); fb.textContent="Yes!"; fb.className="feedback good"; w.correct++; award(k,true); }
-  else { el.classList.add("bad"); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
+  else { el.classList.add("bad"); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; SND.wrong(); }
   w.idx++;
   setTimeout(()=>{ w.locked=false; warmNext(); }, val===c.ans?600:1200);
 }
@@ -1520,9 +1594,7 @@ function startMastery(){
 function masteryBuild(fresh){
   const k=session.kid, m=session.mastery;
   if(fresh){
-    m.queue=[];
-    for(let i=0;i<10;i++){ session.q={op:m.lv.op}; m.queue.push(genQ(k)); }
-    session.q=null;
+    m.queue=genDistinctQs(k, m.lv.op, null, 10);
   } else {
     m.queue=m.missed.slice(); // retry only missed
   }
@@ -1550,7 +1622,7 @@ function masteryAns(el,val){
   const fb=$("fb");
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
   if(val===c.ans){ el.classList.add("good"); fb.textContent="Correct!"; fb.className="feedback good"; m.correct++; award(k,true); }
-  else { el.classList.add("bad"); f.wrong++; m.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
+  else { el.classList.add("bad"); f.wrong++; SND.wrong(); m.missed.push(c); document.querySelectorAll('.opt').forEach(b=>{if(+b.textContent===c.ans)b.classList.add("good");}); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
   m.idx++; save();
   setTimeout(()=>{ m.locked=false; masteryNext(); }, val===c.ans?600:1200);
 }
@@ -1627,9 +1699,15 @@ function screenRange(){
       <div class="seg">
         ${[5,8,10,12].map(s=>`<button class="chip ${(k.fracSpeedSec||8)===s?'on':''}" onclick="setFracSpeed(${s})">${s}s · ${coinsForSpeed(s)}🪙</button>`).join("")}
       </div>
+      <label class="lbl">Sound</label>
+      <div class="seg">
+        <button class="chip ${!SND.muted?'on':''}" onclick="setMute(false)">🔊 On</button>
+        <button class="chip ${SND.muted?'on':''}" onclick="setMute(true)">🔇 Off</button>
+      </div>
       <div style="margin-top:16px"><button class="btn" onclick="saveRange()">Save</button></div>
     </div>`;
 }
+function setMute(m){ SND.setMuted(m); if(!m){ SND.init(); SND.tap(); } screenRange(); }
 function setRange(a,b){ session.kid.range={min:a,max:b}; save(); screenRange(); toast("Saved"); }
 function setSpeed(s){ session.kid.speedSec=s; save(); syncNow(); screenRange(); toast("Goal: "+s+"s"); }
 function setFracSpeed(s){ session.kid.fracSpeedSec=s; save(); syncNow(); screenRange(); toast("Fraction goal: "+s+"s"); }
@@ -2730,6 +2808,7 @@ function popHit(val, missed, el){
   clearTimeout(p.timeout);
   // burst the tapped balloon with a pop effect
   if(el && el.parentNode){
+    SND.pop();
     const burst=document.createElement('span');
     burst.className='pop'; burst.textContent='💥';
     burst.style.left=el.style.left; burst.style.bottom=getComputedStyle(el).bottom;
@@ -2739,7 +2818,7 @@ function popHit(val, missed, el){
   document.querySelectorAll('.balloon').forEach(b=>{b.style.animationPlayState='paused'; b.disabled=true;});
   const f=k.facts[c.key]||(k.facts[c.key]={seen:0,wrong:0}); f.seen++;
   if(val===c.ans){ p.score++; award(k,true); fb.textContent=pick(["Pop! 🎉","Got it!","Nice shot!","Boom!"]); fb.className="feedback good"; }
-  else { f.wrong++; fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
+  else { f.wrong++; SND.wrong(); fb.textContent=`${c.prompt} = ${c.ans}`; fb.className="feedback bad"; }
   p.answered++;
   const unlocked=checkStickers(k); save();
   if(unlocked.length) toast("🎉 New sticker: "+unlocked.join(" "));
@@ -2895,6 +2974,11 @@ try {
     '<div style="padding:60px 24px;text-align:center;color:#8fa6c4;font-family:sans-serif">'+
     '<div style="font-size:40px;margin-bottom:10px">🔄</div>Loading players…</div>';
   syncPull(function(){ unlockEarned(); screenProfiles(); });
+  // browsers require a user gesture before audio can play — unlock on first tap
+  document.addEventListener('pointerdown', function initAudioOnce(){
+    SND.init(); if(SND.ctx && SND.ctx.state==='suspended') SND.ctx.resume();
+    document.removeEventListener('pointerdown', initAudioOnce);
+  }, {once:true});
 } catch(err) {
   document.getElementById('app').innerHTML =
     '<div style="padding:24px;color:#eaf2ff;font-family:sans-serif">'+
