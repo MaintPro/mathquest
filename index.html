@@ -1852,11 +1852,15 @@ function fracLessonContent(kind){
       <p style="font-size:15px;line-height:1.55;margin:0"><b>LCM is the key to adding fractions</b> — it's the common bottom!</p>`;
   }
   if(kind==="add_same"||kind==="sub_same"){
-    const op=kind==="add_same"?"add":"subtract";
-    const sym=kind==="add_same"?"+":"−";
-    return `<p style="font-size:15px;line-height:1.6">When the <b>bottom numbers are the same</b>, just ${op} the <b>top numbers</b> and keep the bottom!</p>
-      <p style="font-size:18px;text-align:center;margin:12px 0"><span class="fracBig"><span>1</span><span class="b">5</span></span> ${sym} <span class="fracBig"><span>2</span><span class="b">5</span></span> = <span class="fracBig"><span>${kind==="add_same"?3:1}</span><span class="b">5</span></span></p>
-      <p style="font-size:15px;line-height:1.55;margin:0">The bottom stays 5 — we're counting fifths.</p>`;
+    if(kind==="add_same"){
+      return `<p style="font-size:15px;line-height:1.6">When the <b>bottom numbers are the same</b>, just <b>add the top numbers</b> and keep the bottom!</p>
+        <p style="font-size:18px;text-align:center;margin:12px 0"><span class="fracBig"><span>1</span><span class="b">5</span></span> + <span class="fracBig"><span>2</span><span class="b">5</span></span> = <span class="fracBig"><span>3</span><span class="b">5</span></span></p>
+        <p style="font-size:15px;line-height:1.55;margin:0">1 + 2 = 3 on top. The bottom stays 5 — we're counting fifths.</p>`;
+    }
+    // subtraction: the bigger top MUST come first, so the answer stays positive
+    return `<p style="font-size:15px;line-height:1.6">When the <b>bottom numbers are the same</b>, just <b>subtract the top numbers</b> and keep the bottom!</p>
+      <p style="font-size:18px;text-align:center;margin:12px 0"><span class="fracBig"><span>3</span><span class="b">5</span></span> − <span class="fracBig"><span>1</span><span class="b">5</span></span> = <span class="fracBig"><span>2</span><span class="b">5</span></span></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">3 − 1 = 2 on top. The bottom stays 5 — we're counting fifths.</p>`;
   }
   if(kind==="add_diff"||kind==="sub_diff"){
     const sym=kind==="add_diff"?"+":"−";
