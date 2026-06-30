@@ -261,6 +261,13 @@ function migrateDB(){
     if(k.stars==null) k.stars=0;
     if(!k.stageSpeed) k.stageSpeed={};  // levelId:stageIdx -> true once speed drill passed
     if(!k.introSeen) k.introSeen={};
+    if(!k.learnSeen) k.learnSeen={};
+    // existing kids with progress in a learn-level aren't forced to redo the intro lesson
+    if(k.stageProgress){
+      if(k.stageProgress.fractions!=null && k.stageProgress.fractions>=0) k.learnSeen.fractions=true;
+      if(k.stageProgress.factors!=null   && k.stageProgress.factors>=0)   k.learnSeen.factors=true;
+      if(k.stageProgress.fracops!=null    && k.stageProgress.fracops>=0)    k.learnSeen.addsame=true;
+    }
     if(!k.science) k.science={};
     // Kids who already cleared any stage in a level have clearly seen the concept —
     // don't force them to watch the intro (only brand-new learners get gated).
@@ -374,6 +381,7 @@ function newKid(name, avatar, pin){
     stageProgress:{},            // levelId -> index of highest CLEARED stage (-1 = none)
     stageSpeed:{},               // "levelId:stageIdx" -> true once speed drill passed
     introSeen:{},                // "levelId" -> true once the animated intro is watched
+    learnSeen:{},                // "levelId" -> true once the interactive Learn walkthrough is done
     science:{},                  // "topicId" -> {explored:true, quizPassed:true}
     lessonsSeen:{},              // "levelId:stageIdx" -> true
     belts:{},                    // levelId -> belt index reached
@@ -848,7 +856,25 @@ function screenLevel(){
       <span class="ico">🎬</span><span><span class="t">Watch: What is ${lv.id==="tables"?"multiplication":"division"}?</span>
       <span class="d">A fun 30-second intro — do this first!</span></span></button>` : "";
   // when intro required and unseen, the stages are gated
-  const stagesGated = hasIntro && !introSeen && !_devMode;
+  let stagesGated = hasIntro && !introSeen && !_devMode;
+
+  // Interactive Learn walkthroughs for this level (fractions, factors, fracops)
+  let learnBanner="";
+  const learnTopics = LEARN_FOR_LEVEL[lv.id] || [];
+  if(learnTopics.length){
+    const firstUnseen = learnTopics.find(t=>!(k.learnSeen && k.learnSeen[t.id]));
+    // the very first learn topic is required before stages unlock
+    const firstRequired = learnTopics[0];
+    const firstDone = k.learnSeen && k.learnSeen[firstRequired.id];
+    if(!firstDone && !_devMode) stagesGated = true;
+    learnBanner = learnTopics.map((t,i)=>{
+      const seen = k.learnSeen && k.learnSeen[t.id];
+      const isReq = i===0 && !seen;
+      return `<button class="modecard" onclick="startLearn('${t.id}')" style="background:linear-gradient(180deg,#1f2d4d,#15203a);border-color:${seen?'var(--line)':'var(--gold)'}">
+        <span class="ico">${seen?'📚':'✨'}</span><span><span class="t">${seen?'Learn again: ':'Learn: '}${t.name}</span>
+        <span class="d">${seen?'Replay this interactive lesson':(isReq?'Tap, drag & discover — do this first!':'Interactive lesson with Bolt')}</span></span></button>`;
+    }).join("");
+  }
 
   const stageBtns=stages.map((s,i)=>{
     const isCleared = i<=cleared;
@@ -858,7 +884,7 @@ function screenLevel(){
     const bg = isCleared?'linear-gradient(180deg,#173a2e,#102a22)'
               : ((isCurrent&&!stagesGated)||_devMode)?'linear-gradient(180deg,var(--card),var(--bg2))'
               : 'var(--bg2)';
-    const click = locked?(stagesGated?`onclick="toast('Watch the intro first 🎬')"`:`onclick="toast('Clear the stage before this one first 🔒')"`):`onclick="openStage(${i})"`;
+    const click = locked?(stagesGated?`onclick="toast('Do the first lesson above first 📚')"`:`onclick="toast('Clear the stage before this one first 🔒')"`):`onclick="openStage(${i})"`;
     return `<button class="modecard" ${click} style="background:${bg};${locked?'opacity:.5':''};${((isCurrent&&!stagesGated)||_devMode)?'border-color:var(--gold)':''}">
       <span class="ico">${statusIcon}</span>
       <span><span class="t">${s.name}</span>
@@ -881,6 +907,7 @@ function screenLevel(){
       <p class="muted" style="font-size:13px;margin:4px 0 0">Each stage: a quick lesson, then a test. Clear it to unlock the next and climb the belts.</p>
     </div>
     ${introBanner}
+    ${learnBanner}
     ${stageBtns}
 
     ${lv.id!=="fractions"?`
@@ -903,6 +930,294 @@ function startIntro(levelId){
   session.intro={levelId, step:0};
   introStep();
 }
+
+/* ================= INTERACTIVE LEARN WALKTHROUGHS ================= */
+/* Rich, multi-step, interactive lessons for the hardest concepts.
+   Keyed by a "learn id". Each step: {title, say, render, interactive?}.
+   Interactive steps wait for the child to DO something before "Next" appears. */
+function hasLearn(levelId){ return LEARN_FOR_LEVEL[levelId] && LEARN_FOR_LEVEL[levelId].length>0; }
+// which Learn walkthroughs belong to each level (in order)
+const LEARN_FOR_LEVEL = {
+  fractions: [{id:"fractions", name:"What is a Fraction?"},{id:"equiv", name:"Equivalent Fractions"}],
+  factors:   [{id:"factors", name:"Discover Factors"},{id:"multiples", name:"Multiples & LCM"}],
+  fracops:   [{id:"addsame", name:"Adding (same bottom)"},{id:"adddiff", name:"Adding (different bottoms)"}]
+};
+function startLearn(topicId){
+  if(!LEARN_TOPICS[topicId]) return screenLevel();
+  session.learn={topicId, step:0, done:false};
+  learnStep();
+}
+function learnSteps(topicId){ return LEARN_TOPICS[topicId] ? LEARN_TOPICS[topicId]() : []; }
+function learnStep(){
+  const L=session.learn;
+  const steps=learnSteps(L.topicId);
+  const s=steps[L.step];
+  const last=L.step===steps.length-1;
+  L.actDone=false; // reset interaction gate for this step
+  const needsAct=!!s.interactive;
+  app.innerHTML=`
+    <div class="qtop"><button class="back" onclick="SND.stopSpeech();screenLevel()">✕</button>
+      <span class="pill" style="color:var(--gold)">📚 ${s.title}</span>
+      <span class="pill">${L.step+1} / ${steps.length}</span></div>
+    <div class="progress"><div style="width:${((L.step+1)/steps.length)*100}%"></div></div>
+    <div class="card" style="padding:16px">${s.render()}</div>
+    <div class="center" id="learnNav" style="margin-top:6px;display:flex;gap:8px;justify-content:center">
+      <button class="btn ghost sm" onclick="SND.say(learnNarration())">🔊 Replay</button>
+      ${needsAct
+        ? `<button class="btn gold" id="learnNext" disabled style="opacity:.45" onclick="learnAdvance()">${last?'Finish 🎉':'Next →'}</button>`
+        : `<button class="btn gold" onclick="learnAdvance()">${last?'Finish 🎉':'Next →'}</button>`}
+    </div>
+    ${needsAct?`<p class="center muted" id="learnHint" style="font-size:13px;margin-top:6px">👆 Try it above to continue</p>`:``}`;
+  // run any post-render setup (wiring drag/tap handlers)
+  if(typeof s.setup==='function'){ try{ s.setup(); }catch(e){} }
+  SND.init(); setTimeout(()=>SND.say(s.say), 250);
+}
+function learnNarration(){ const L=session.learn; return learnSteps(L.topicId)[L.step].say; }
+function learnAdvance(){
+  const L=session.learn;
+  const steps=learnSteps(L.topicId);
+  if(L.step>=steps.length-1){ finishLearn(); return; }
+  L.step++; learnStep();
+}
+// called by an interactive element when the child completes the action
+function learnActionDone(){
+  const L=session.learn; if(L.actDone) return; L.actDone=true;
+  SND.correct();
+  const btn=$("learnNext"); if(btn){ btn.disabled=false; btn.style.opacity='1'; }
+  const hint=$("learnHint"); if(hint){ hint.textContent="Great! Tap Next →"; hint.style.color="var(--green)"; }
+}
+function finishLearn(){
+  const k=session.kid, L=session.learn;
+  SND.stopSpeech();
+  if(!k.learnSeen) k.learnSeen={};
+  k.learnSeen[L.topicId]=true;
+  save(); syncNow();
+  SND.master();
+  toast("Lesson complete! 🌟");
+  screenLevel();
+}
+/* ============================================================ */
+
+/* ================= INTERACTIVE LEARN CONTENT ================= */
+// Reusable interactive bits. Each calls learnActionDone() when the child completes it.
+
+// a fraction bar the child taps to SHADE parts (target = how many to shade)
+function tapShadeBar(parts, target, id){
+  let cells="";
+  for(let i=0;i<parts;i++){
+    cells+=`<div data-i="${i}" onclick="tapShadeHit('${id}',${i},${target})" 
+      style="flex:1;height:54px;border:2px solid var(--line);border-right:${i<parts-1?'1px':'2px'} solid var(--line);
+      background:var(--bg2);cursor:pointer;transition:background .2s;border-radius:${i===0?'10px 0 0 10px':i===parts-1?'0 10px 10px 0':'0'}"></div>`;
+  }
+  return `<div id="${id}" data-shaded="0" style="display:flex;max-width:340px;margin:10px auto">${cells}</div>`;
+}
+function tapShadeHit(id, i, target){
+  const bar=$(id); if(!bar) return;
+  const cell=bar.querySelector(`[data-i="${i}"]`);
+  const on=cell.style.background.includes('94, 224');
+  cell.style.background = on ? 'var(--bg2)' : 'linear-gradient(180deg,#5ee0ff,#34b6f0)';
+  SND.tap();
+  const shaded=bar.querySelectorAll('[data-i]').length
+    ? Array.from(bar.querySelectorAll('[data-i]')).filter(c=>c.style.background.includes('94, 224')).length : 0;
+  bar.dataset.shaded=shaded;
+  if(shaded===target) learnActionDone();
+}
+
+// tappable number tiles; correct ones light up. completes when all correct found.
+function tapNumbers(nums, correctSet, id, prompt){
+  const tiles=nums.map(n=>`<button data-n="${n}" onclick="tapNumberHit('${id}',${n})"
+    style="width:46px;height:46px;border-radius:10px;border:2px solid var(--line);background:var(--bg2);
+    color:var(--ink);font-size:18px;font-weight:800;cursor:pointer;margin:3px">${n}</button>`).join("");
+  return `<div id="${id}" data-correct='${JSON.stringify(correctSet)}' data-found="0" 
+    style="display:flex;flex-wrap:wrap;justify-content:center;max-width:340px;margin:10px auto">${tiles}</div>
+    ${prompt?`<p class="center muted" style="font-size:13px">${prompt}</p>`:''}`;
+}
+function tapNumberHit(id, n){
+  const box=$(id); if(!box) return;
+  const correct=JSON.parse(box.dataset.correct);
+  const btn=box.querySelector(`[data-n="${n}"]`);
+  if(btn.dataset.hit) return;
+  if(correct.includes(n)){
+    btn.dataset.hit="1"; btn.style.background="linear-gradient(180deg,#3ddc97,#22b07d)"; btn.style.borderColor="#22b07d"; btn.style.color="#06281e";
+    SND.correct();
+    const found=box.querySelectorAll('[data-hit]').length;
+    box.dataset.found=found;
+    if(found===correct.length) learnActionDone();
+  } else {
+    btn.style.background="linear-gradient(180deg,#ff8a8a,#e0444b)"; SND.wrong();
+    setTimeout(()=>{ btn.style.background="var(--bg2)"; }, 400);
+  }
+}
+
+// two-choice "tap the bigger" / yes-no etc. completes on correct.
+function tapChoice(options, correctVal, id){
+  return `<div id="${id}" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:12px 0">
+    ${options.map(o=>`<button onclick="tapChoiceHit('${id}','${o.val}','${correctVal}',this)"
+      style="padding:14px 20px;border-radius:12px;border:2px solid var(--line);background:var(--bg2);color:var(--ink);
+      font-size:16px;font-weight:700;cursor:pointer;min-width:90px">${o.label}</button>`).join("")}
+  </div>`;
+}
+function tapChoiceHit(id, val, correct, el){
+  if(el.dataset.locked) return;
+  if(val===correct){
+    el.style.background="linear-gradient(180deg,#3ddc97,#22b07d)"; el.style.color="#06281e";
+    Array.from($(id).children).forEach(b=>b.dataset.locked="1");
+    learnActionDone();
+  } else {
+    el.style.background="linear-gradient(180deg,#ff8a8a,#e0444b)"; SND.wrong();
+    setTimeout(()=>{ el.style.background="var(--bg2)"; }, 400);
+  }
+}
+
+// a "slicer": tap a + button to cut a bar into more equal pieces (re-slicing for equivalence/common denom)
+function sliceBar(startParts, targetParts, shadedFraction, id){
+  return `<div id="${id}" data-parts="${startParts}" data-target="${targetParts}" data-shadefrac="${shadedFraction}">
+      ${sliceBarRender(startParts, shadedFraction)}
+    </div>
+    <div class="center" style="margin-top:8px">
+      <button class="btn ghost sm" onclick="sliceBarCut('${id}')">✂️ Cut into more pieces</button>
+    </div>`;
+}
+function sliceBarRender(parts, shadeFrac){
+  const shadedCount=Math.round(shadeFrac*parts);
+  let cells="";
+  for(let i=0;i<parts;i++){
+    const on=i<shadedCount;
+    cells+=`<div style="flex:1;height:50px;border:2px solid var(--line);border-right:${i<parts-1?'1px':'2px'} solid var(--line);
+      background:${on?'linear-gradient(180deg,#5ee0ff,#34b6f0)':'var(--bg2)'};transition:all .3s;
+      border-radius:${i===0?'10px 0 0 10px':i===parts-1?'0 10px 10px 0':'0'}"></div>`;
+  }
+  return `<div style="display:flex;max-width:340px;margin:6px auto">${cells}</div>
+    <p class="center" style="font-size:15px;margin:6px 0 0">${Math.round(shadeFrac*parts)}/${parts} shaded</p>`;
+}
+function sliceBarCut(id){
+  const box=$(id); if(!box) return;
+  let parts=+box.dataset.parts, target=+box.dataset.target, sf=+box.dataset.shadefrac;
+  if(parts>=target){ learnActionDone(); return; }
+  parts=target;            // re-slice straight to the common-denominator target
+  box.dataset.parts=parts;
+  box.innerHTML=sliceBarRender(parts, sf);
+  SND.pop();
+  learnActionDone();
+}
+
+// ---- The six lessons ----
+const LEARN_TOPICS = {
+  fractions: ()=>[
+    {title:"A whole", say:"Let's learn what a fraction really is. Here is one whole bar. Right now it isn't cut at all — it's just one.",
+     render:()=>mascotSay("This is <b>one whole</b> — not cut yet.","happy")+
+       `<div style="display:flex;max-width:340px;margin:14px auto"><div style="flex:1;height:54px;border:2px solid var(--line);border-radius:10px;background:linear-gradient(180deg,#5ee0ff,#34b6f0)"></div></div>`},
+    {title:"Equal parts", say:"To make a fraction, we cut the whole into EQUAL parts. This bar is cut into four equal parts. The bottom number of a fraction tells how many equal parts there are.",
+     render:()=>mascotSay("Cut the whole into <b>equal parts</b>. Four equal parts here — the <b>bottom</b> number is 4.","happy")+
+       sliceBarRender(4,0)+`<p class="center muted" style="font-size:14px;margin-top:4px">4 equal parts → bottom number = 4</p>`},
+    {title:"Your turn — shade 3", say:"Now you try! Tap the bar to shade three of the four parts. The top number counts how many parts we shade.",
+     interactive:true,
+     render:()=>mascotSay("<b>Tap to shade 3</b> of the 4 parts. The <b>top</b> number is how many you shade!","happy")+
+       tapShadeBar(4,3,"learnShade1")+`<p class="center muted" style="font-size:13px">Shade 3 parts to make ¾</p>`},
+    {title:"That's three quarters", say:"Brilliant! You made three quarters. Three parts shaded out of four equal parts. Top is three, bottom is four. That's a fraction!",
+     render:()=>mascotSay("You made <b>¾</b>! Top 3 (shaded), bottom 4 (equal parts). That's a fraction! 🎉","cheer")+
+       `<div class="center" style="margin:10px 0"><span class="fracBig" style="font-size:52px"><span style="color:#5ee0ff">3</span><span class="b" style="color:#ffd23f">4</span></span></div>`}
+  ],
+  equiv: ()=>[
+    {title:"One half", say:"Let's discover equivalent fractions — different fractions that are worth the same. Here is one half: one part shaded out of two.",
+     render:()=>mascotSay("Here's <b>½</b> — one part shaded out of two.","happy")+sliceBarRender(2,0.5)},
+    {title:"Cut it again", say:"Watch what happens if we cut each piece in half. Tap the button to cut this same bar into four pieces. The shaded amount won't change!",
+     interactive:true,
+     render:()=>mascotSay("Tap <b>✂️ Cut</b> — slice the SAME bar into 4. Watch the blue stay the same size!","happy")+
+       sliceBar(2,4,0.5,"learnSlice1")},
+    {title:"Same amount!", say:"Look — the blue part is exactly the same size, but now it's two pieces out of four. So one half equals two quarters. They're equivalent!",
+     render:()=>mascotSay("Same blue! ½ = <b>2/4</b>. They're <b>equivalent</b> — equal value, different numbers.","cheer")+
+       `<div class="center" style="font-size:20px;margin:12px 0">½ = <span class="fracBig"><span>2</span><span class="b">4</span></span></div>`},
+    {title:"The rule", say:"Here's the rule: if you multiply the top and the bottom by the same number, you get an equivalent fraction. One times two over two times two equals two quarters.",
+     render:()=>mascotSay("Multiply <b>top AND bottom</b> by the same number → equivalent fraction!","happy")+
+       `<p class="center" style="font-size:18px;margin:12px 0;line-height:1.8">½ = <b style="color:var(--gold2)">1×2</b>/<b style="color:var(--gold2)">2×2</b> = <span class="fracBig"><span>2</span><span class="b">4</span></span></p>`},
+    {title:"Your turn", say:"Quick check! Which fraction is equal to one half? Tap the right one.",
+     interactive:true,
+     render:()=>mascotSay("Which one equals <b>½</b>? Tap it!","happy")+
+       tapChoice([{label:"3/6",val:"3/6"},{label:"2/5",val:"2/5"},{label:"3/4",val:"3/4"}],"3/6","learnEquivQ")}
+  ],
+  factors: ()=>[
+    {title:"What's a factor?", say:"Let's discover factors. A factor is a number that divides evenly into another. Here are twelve dots. We'll find which numbers fit into twelve perfectly.",
+     render:()=>mascotSay("A <b>factor</b> divides evenly. Here are <b>12 dots</b> — let's find what fits!","happy")+dotsRow(12)},
+    {title:"Make equal rows", say:"Twelve dots make a neat three rows of four — that fits perfectly with nothing left over. So three and four are both factors of twelve.",
+     render:()=>mascotSay("12 = <b>3 rows of 4</b>. Perfect fit! So 3 and 4 are <b>factors</b> of 12.","happy")+dotsGrid(3,4)},
+    {title:"Your turn — find factors", say:"Now you try. Tap every number that IS a factor of twelve — every number that divides into twelve with nothing left over.",
+     interactive:true,
+     render:()=>mascotSay("Tap every <b>factor of 12</b> (divides in evenly).","happy")+
+       tapNumbers([1,2,3,4,5,6,7,8,9,12],[1,2,3,4,6,12],"learnFactQ","Find all 6 factors of 12")},
+    {title:"All the factors", say:"Perfect! The factors of twelve are one, two, three, four, six, and twelve. Five, seven, eight and nine don't fit evenly, so they're not factors.",
+     render:()=>mascotSay("Factors of 12: <b>1, 2, 3, 4, 6, 12</b> 🎉","cheer")+
+       `<p class="center muted" style="font-size:14px;margin-top:8px">5, 7, 8, 9 leave a remainder — not factors.</p>`}
+  ],
+  multiples: ()=>[
+    {title:"What's a multiple?", say:"Let's learn multiples and the lowest common multiple. A multiple is what you get by skip-counting. Multiples of two: two, four, six, eight.",
+     render:()=>mascotSay("A <b>multiple</b> is skip-counting. 2s: <b>2, 4, 6, 8…</b>","happy")+skipLine(2,6)},
+    {title:"Multiples of three", say:"And the multiples of three: three, six, nine, twelve. Now — can you spot a number that's in BOTH lists?",
+     render:()=>mascotSay("3s: <b>3, 6, 9, 12…</b> See a number in <b>both</b> lists?","happy")+skipLine(2,6)+skipLine(3,4)},
+    {title:"Find the match", say:"Tap the smallest number that appears in both the twos and the threes. That special number is the lowest common multiple.",
+     interactive:true,
+     render:()=>mascotSay("Tap the <b>smallest number in BOTH</b> lists (2s and 3s).","happy")+
+       tapNumbers([2,3,4,6,8,9],[6],"learnLcmQ","It's the LCM of 2 and 3")},
+    {title:"That's the LCM!", say:"Yes! Six is the lowest common multiple of two and three — the smallest number both can reach. This is exactly what we use as the common bottom when adding fractions!",
+     render:()=>mascotSay("<b>6</b> is the LCM of 2 and 3! 🎉 It's the common bottom for adding fractions.","cheer")+
+       `<div class="center" style="font-size:18px;margin:10px 0">LCM(2, 3) = <b style="color:var(--gold2)">6</b></div>`}
+  ],
+  addsame: ()=>[
+    {title:"Same bottom", say:"Let's add fractions with the same bottom. We have one fifth, and we'll add two more fifths. The bottom stays the same — we only add the tops.",
+     render:()=>mascotSay("Adding with the <b>same bottom</b>: just add the tops!","happy")+sliceBarRender(5,0.2)},
+    {title:"Add the tops", say:"One fifth plus two fifths. One plus two is three. The bottom stays five. So we get three fifths. Watch the bar fill up.",
+     render:()=>mascotSay("1/5 + 2/5 → add tops: 1+2 = <b>3</b>. Bottom stays 5.","happy")+sliceBarRender(5,0.6)+
+       `<p class="center" style="font-size:18px;margin:6px 0 0"><span class="fracBig"><span>1</span><span class="b">5</span></span> + <span class="fracBig"><span>2</span><span class="b">5</span></span> = <span class="fracBig"><span>3</span><span class="b">5</span></span></p>`},
+    {title:"Your turn", say:"You try! Two eighths plus three eighths. Add the tops. Tap the correct answer.",
+     interactive:true,
+     render:()=>mascotSay("2/8 + 3/8 = ? Add the tops, keep the bottom!","happy")+
+       tapChoice([{label:"5/8",val:"5/8"},{label:"5/16",val:"5/16"},{label:"6/8",val:"6/8"}],"5/8","learnAddQ")},
+    {title:"Never add bottoms!", say:"Remember the big rule: when the bottoms are the same, add ONLY the tops. The bottom never changes. Two eighths plus three eighths is five eighths, not five sixteenths!",
+     render:()=>mascotSay("⚠️ <b>Never add the bottoms!</b> 2/8 + 3/8 = 5/8, not 5/16.","happy")+
+       `<div class="card" style="border-color:var(--gold);margin-top:8px"><p class="center" style="margin:0;font-size:15px">Same bottom → add tops only, keep the bottom.</p></div>`}
+  ],
+  adddiff: ()=>[
+    {title:"Different bottoms", say:"This is the big one — adding fractions with different bottoms. One half plus one third. We can't add them yet, because the pieces are different sizes.",
+     render:()=>mascotSay("½ + ⅓ — different bottoms! The pieces are <b>different sizes</b>, so we can't add yet.","happy")+
+       sliceBarRender(2,0.5)+sliceBarRender(3,1/3)},
+    {title:"Find the common bottom", say:"We find the lowest common multiple of two and three, which is six. We'll re-slice both bars into six equal pieces so they match.",
+     render:()=>mascotSay("LCM of 2 and 3 is <b>6</b>. Let's re-slice both into <b>sixths</b>!","happy")+
+       `<div class="center" style="font-size:16px;margin:8px 0">LCM(2,3) = <b style="color:var(--gold2)">6</b></div>`},
+    {title:"Re-slice the half", say:"Tap to cut the half-bar into sixths. Watch carefully — one half becomes three sixths. The shaded amount is the same, but now it's three pieces!",
+     interactive:true,
+     render:()=>mascotSay("Tap <b>✂️ Cut</b> — turn ½ into sixths. Watch: ½ becomes <b>3/6</b>!","happy")+
+       sliceBar(2,6,0.5,"learnDiffSlice")},
+    {title:"The top changes too!", say:"This is the part everyone forgets. When one half became three sixths, the TOP changed from one to three! You must multiply the top by the same number as the bottom. One third becomes two sixths the same way.",
+     render:()=>mascotSay("🔑 <b>The top changes too!</b> ½ = 1×3/2×3 = <b>3/6</b>. And ⅓ = 1×2/3×2 = <b>2/6</b>.","cheer")+
+       `<p class="center" style="font-size:16px;line-height:1.9;margin:10px 0">½ = <b style="color:var(--gold2)">1×3</b>/<b style="color:var(--gold2)">2×3</b> = 3/6<br>⅓ = <b style="color:var(--gold2)">1×2</b>/<b style="color:var(--gold2)">3×2</b> = 2/6</p>`},
+    {title:"Now add!", say:"Now both have the same bottom, so we add the tops. Three sixths plus two sixths equals five sixths. Done!",
+     render:()=>mascotSay("Same bottom now → add tops! 3/6 + 2/6 = <b>5/6</b> 🎉","cheer")+
+       sliceBarRender(6,5/6)+
+       `<p class="center" style="font-size:18px;margin:6px 0 0"><span class="fracBig"><span>3</span><span class="b">6</span></span> + <span class="fracBig"><span>2</span><span class="b">6</span></span> = <span class="fracBig"><span>5</span><span class="b">6</span></span></p>`},
+    {title:"Your turn", say:"Quick check! When you change one half into sixths, what does the top become? Tap the answer.",
+     interactive:true,
+     render:()=>mascotSay("½ changed into sixths — what's the new <b>top</b>?","happy")+
+       tapChoice([{label:"3",val:"3"},{label:"1",val:"1"},{label:"6",val:"6"}],"3","learnDiffQ")}
+  ]
+};
+
+// small visual helpers for the learn lessons
+function dotsRow(n){
+  let d=""; for(let i=0;i<n;i++) d+=`<span style="display:inline-block;width:22px;height:22px;margin:3px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7fe9ff,#34b6f0);animation:popIn .3s ${(i*0.06).toFixed(2)}s both"></span>`;
+  return `<div class="center" style="max-width:320px;margin:10px auto">${d}</div>`;
+}
+function dotsGrid(r,c){
+  let rows="";
+  for(let y=0;y<r;y++){ let row=""; for(let x=0;x<c;x++){ const idx=y*c+x; row+=`<span style="display:inline-block;width:24px;height:24px;margin:3px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7fe9ff,#34b6f0);animation:dropIn .4s ${(idx*0.08).toFixed(2)}s both"></span>`; } rows+=`<div>${row}</div>`; }
+  return `<div class="center" style="margin:10px 0">${rows}</div>`;
+}
+function skipLine(step, count){
+  let chips="";
+  for(let i=1;i<=count;i++){ chips+=`<span style="display:inline-block;padding:6px 10px;margin:3px;border-radius:10px;background:var(--bg2);border:2px solid ${step*i===6?'var(--gold)':'var(--line)'};font-weight:800;font-size:15px;animation:popIn .3s ${(i*0.12).toFixed(2)}s both">${step*i}</span>`; }
+  return `<div class="center" style="margin:6px 0"><span class="muted" style="font-size:13px;display:block">${step}s:</span>${chips}</div>`;
+}
+/* ============================================================ */
+
 function introSteps(levelId){
   if(levelId==="tables"){
     return [
