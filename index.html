@@ -471,13 +471,16 @@ function unlockEarned(){
 /* ---- Fraction stages (Phase 2: Understanding) ----
    kind drives which question generator + visual is used. */
 const FRACTION_STAGES = [
+  // Chapter 0 — The very basics (numerator & denominator FIRST)
+  {id:"meet",    name:"What's a Fraction?", kind:"meet",    desc:"Meet the top & bottom numbers"},
   // Chapter 1 — Understanding
+  {id:"parts",   name:"Top & Bottom",      kind:"parts",   desc:"Numerator & denominator"},
   {id:"name",    name:"Name the Fraction", kind:"name",    desc:"Read a picture as a fraction"},
   {id:"shade",   name:"How Much Shaded",   kind:"shade",   desc:"Type the fraction that's coloured"},
   {id:"build",   name:"Build a Fraction",  kind:"build",   desc:"Show a fraction on a bar"},
-  {id:"parts",   name:"Parts of a Whole",  kind:"parts",   desc:"Numerator & denominator"},
   // Chapter 2 — Comparing & the number line
-  {id:"compare",  name:"Which is Bigger?",  kind:"compare",  desc:"Compare two fractions"},
+  {id:"compare",  name:"Which is Bigger?",  kind:"compare",  desc:"Compare (same whole)"},
+  {id:"samewhole",name:"Same or Different Whole?", kind:"samewhole", desc:"½ of 50 vs ¼ of 300!"},
   {id:"numline",  name:"On the Number Line",kind:"numline",  desc:"Place a fraction 0–1"},
   // Chapter 3 — Improper & mixed numbers
   {id:"improper", name:"Improper Fractions", kind:"improper", desc:"More than a whole"},
@@ -1063,7 +1066,7 @@ function openScience(id){
       <span class="d">${prog.explored?'Explored ✓ — watch again':'Discover how it works with Bolt'}</span></span></button>
     <button class="modecard" onclick="${prog.explored||_devMode?`startSciQuiz('${id}')`:`toast('Explore first 🔍')`}" style="${prog.explored||_devMode?'':'opacity:.55'}">
       <span class="ico">📝</span><span><span class="t">Quiz</span>
-      <span class="d">${prog.quizPassed?'Passed ✓ — try again':'Check what you learned (5 questions)'}</span></span></button>`;
+      <span class="d">${prog.quizPassed?'Passed ✓ — try again':'Check what you learned (25 questions)'}</span></span></button>`;
 }
 
 /* ---- Explore: multi-step concept walkthrough with narration ---- */
@@ -1135,7 +1138,20 @@ function scienceQuiz(id){
       {q:"In which state do particles zoom around and fill all the space?", choices:["Solid","Liquid","Gas"], ans:"Gas"},
       {q:"What do we call ice turning into water?", choices:["Melting","Freezing","Boiling"], ans:"Melting"},
       {q:"A liquid...", choices:["Keeps its shape","Flows and fills its container","Floats away as gas"], ans:"Flows and fills its container"},
-      {q:"What happens when you COOL steam down a lot?", choices:["It becomes liquid, then solid","It stays a gas forever","It disappears"], ans:"It becomes liquid, then solid"}
+      {q:"What happens when you COOL steam down a lot?", choices:["It becomes liquid, then solid","It stays a gas forever","It disappears"], ans:"It becomes liquid, then solid"},
+      {q:"In a solid, the particles are...", choices:["Packed tightly in a pattern","Spread far apart","Zooming everywhere"], ans:"Packed tightly in a pattern"},
+      {q:"Water turning into steam is called...", choices:["Boiling","Freezing","Melting"], ans:"Boiling"},
+      {q:"Water turning into ice is called...", choices:["Freezing","Melting","Boiling"], ans:"Freezing"},
+      {q:"Which state can be poured but keeps the same amount?", choices:["Liquid","Solid","Gas"], ans:"Liquid"},
+      {q:"What makes a solid melt into a liquid?", choices:["Adding heat","Taking away heat","Stirring it"], ans:"Adding heat"},
+      {q:"Steam, air and oxygen are all examples of a...", choices:["Gas","Liquid","Solid"], ans:"Gas"},
+      {q:"Which has particles that can slide past each other?", choices:["Liquid","Solid","Neither"], ans:"Liquid"},
+      {q:"An ice cube is water in which state?", choices:["Solid","Liquid","Gas"], ans:"Solid"},
+      {q:"If you cool a gas down, it can become a...", choices:["Liquid","New gas","Solid instantly"], ans:"Liquid"},
+      {q:"Which state spreads out to fill any container completely?", choices:["Gas","Liquid","Solid"], ans:"Gas"},
+      {q:"Does a liquid keep its own shape?", choices:["No, it takes the container's shape","Yes, always","Only when cold"], ans:"No, it takes the container's shape"},
+      {q:"Heating ice enough turns it into...", choices:["Water, then steam","Steam, then water","A solid block"], ans:"Water, then steam"},
+      {q:"Which direction does heat move things? Solid →", choices:["Liquid → Gas","Gas → Liquid","Nowhere"], ans:"Liquid → Gas"}
     ];
   }
   return [
@@ -1143,12 +1159,35 @@ function scienceQuiz(id){
     {q:"Which one does NOT dissolve in water?", choices:["Sand","Sugar","Salt"], ans:"Sand"},
     {q:"A cork in water will usually...", choices:["Float","Sink","Dissolve"], ans:"Float"},
     {q:"Red paint + yellow paint makes...", choices:["Orange","Purple","Green"], ans:"Orange"},
-    {q:"When sugar dissolves, it...", choices:["Is still there but hidden","Is gone forever","Turns into water"], ans:"Is still there but hidden"}
+    {q:"When sugar dissolves, it...", choices:["Is still there but hidden","Is gone forever","Turns into water"], ans:"Is still there but hidden"},
+    {q:"Blue paint + yellow paint makes...", choices:["Green","Orange","Purple"], ans:"Green"},
+    {q:"A metal coin dropped in water will usually...", choices:["Sink","Float","Dissolve"], ans:"Sink"},
+    {q:"Salt stirred into water will...", choices:["Dissolve","Sink and stay whole","Float"], ans:"Dissolve"},
+    {q:"Things that are light for their size tend to...", choices:["Float","Sink","Dissolve"], ans:"Float"},
+    {q:"Mixing two materials to make a new colour is an example of...", choices:["Making something new","Dissolving","Floating"], ans:"Making something new"},
+    {q:"If sand is stirred into water, it...", choices:["Sinks to the bottom","Dissolves away","Floats on top"], ans:"Sinks to the bottom"},
+    {q:"Red + blue paint makes...", choices:["Purple","Green","Orange"], ans:"Purple"},
+    {q:"Which of these floats?", choices:["A piece of wood","A metal coin","A rock"], ans:"A piece of wood"},
+    {q:"When something dissolves, the tiny pieces are...", choices:["Too small to see","Gone forever","Floating on top"], ans:"Too small to see"},
+    {q:"Which is heavy for its size and sinks?", choices:["A metal coin","A cork","A leaf"], ans:"A metal coin"},
+    {q:"Does sugar disappear when it dissolves?", choices:["No, it's still there","Yes, forever","It turns into water"], ans:"No, it's still there"},
+    {q:"A balloon filled with air floats up because air is...", choices:["Light for its size","Heavy","Solid"], ans:"Light for its size"},
+    {q:"Which does NOT dissolve in water?", choices:["A pebble","Sugar","Salt"], ans:"A pebble"}
   ];
 }
 function startSciQuiz(id){
-  const qs=scienceQuiz(id).slice();
-  for(let i=qs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [qs[i],qs[j]]=[qs[j],qs[i]]; }
+  const bank=scienceQuiz(id).slice();
+  // shuffle the bank
+  for(let i=bank.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [bank[i],bank[j]]=[bank[j],bank[i]]; }
+  // longer quiz: aim for 25; if the bank is smaller, reshuffle & continue so kids get 25 questions
+  const target=25;
+  let qs=[];
+  while(qs.length<target){
+    const batch=bank.slice();
+    for(let i=batch.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [batch[i],batch[j]]=[batch[j],batch[i]]; }
+    qs=qs.concat(batch);
+  }
+  qs=qs.slice(0,target);
   qs.forEach(q=>{ q.shuffled=q.choices.slice().sort(()=>Math.random()-.5); });
   session.sciQuiz={id, qs, idx:0, correct:0, locked:false};
   sciQuizNext();
@@ -1187,7 +1226,7 @@ function sciQuizAns(el,val){
 }
 function sciQuizEnd(){
   const k=session.kid, Q=session.sciQuiz;
-  const passed=Q.correct>=4; // 4/5 to pass
+  const passed=Q.correct >= Math.ceil(Q.qs.length*0.8); // 80% to pass (e.g. 20/25)
   if(passed){
     if(!k.science[Q.id]) k.science[Q.id]={};
     if(!k.science[Q.id].quizPassed){ k.coins=(k.coins||0)+5; } // first-pass bonus
@@ -1303,13 +1342,15 @@ function lessonNarration(kind, mixed){
   const N={
     // fractions — understanding
     name:"A fraction shows part of a whole. The bottom tells how many equal parts, the top tells how many we have.",
+    meet:"Every fraction has two numbers. The top is the numerator — how many parts we have. The bottom is the denominator — the total equal parts. Top is numerator, bottom is denominator!",
     shade:"Count the shaded parts for the top, and all the equal parts for the bottom.",
     build:"Read the numbers and type the fraction. Top on top, bottom on the bottom.",
     parts:"The top number is the numerator — the shaded parts. The bottom is the denominator — the total parts.",
-    compare:"To compare fractions, look at how much is shaded. The one that's more filled is bigger!",
+    compare:"To compare fractions of the same whole, look at how much is shaded. The one that's more filled is bigger! But this only works when the wholes are the same size.",
+    samewhole:"Big idea! A fraction is only bigger if it's of the same whole. Half of fifty is twenty-five, but a quarter of three hundred is seventy-five. So work out each amount first, then compare!",
     numline:"A fraction lives on the number line between zero and one. The bottom is how many steps, the top is how far along.",
     improper:"An improper fraction has a top bigger than its bottom. That means it's more than one whole!",
-    mixed_num:"A mixed number is a whole and a fraction together. Multiply the whole by the bottom, then add the top.",
+    mixed_num:"A mixed number is a whole and a fraction together. Here's the trick: it can always be turned into an improper fraction. Multiply the whole by the bottom, then add the top. It always works!",
     frac_of:"To find a fraction of a number, divide by the bottom, then multiply by the top.",
     // fractions — equivalent & simplify
     equiv_see:"Equivalent fractions look different but shade the same amount. Like one half and two quarters!",
@@ -1371,10 +1412,31 @@ function fracLessonContent(kind){
         <li>2/4 — not simplest ❌ (both divide by 2 → ½)</li>
       </ul>`;
   }
+  if(kind==="meet"){
+    return `<p style="font-size:15px;line-height:1.6">Every fraction has <b>two numbers</b>, and each has a special name and job:</p>
+      <div style="display:flex;gap:14px;justify-content:center;align-items:center;margin:14px 0">
+        <span class="fracBig" style="font-size:54px"><span style="color:#5ee0ff">3</span><span class="b" style="color:#ffd23f">4</span></span>
+        <div style="text-align:left;font-size:14px;line-height:1.9">
+          <div><span style="color:#5ee0ff;font-weight:800">3 = numerator</span> (top) — how many parts we <b>have</b></div>
+          <div><span style="color:#ffd23f;font-weight:800">4 = denominator</span> (bottom) — how many <b>equal parts</b> in the whole</div>
+        </div></div>
+      <div class="center">${fracBarSVG(3,4)}</div>
+      <p style="font-size:15px;line-height:1.55;margin:8px 0 0;text-align:center"><b>Remember:</b> top = numerator, bottom = denominator. The bottom is always the total!</p>`;
+  }
   if(kind==="compare"){
-    return `<p style="font-size:15px;line-height:1.6">To compare fractions, look at how much is shaded. The bar that's <b>more filled</b> is bigger.</p>
+    return `<p style="font-size:15px;line-height:1.6">To compare fractions <b>of the same whole</b>, look at how much is shaded. The bar that's <b>more filled</b> is bigger.</p>
       <div style="margin:14px 0">${twoBarSVG(3,4,1,2)}</div>
-      <p style="font-size:15px;line-height:1.55;margin:0">¾ fills more than ½, so ¾ is bigger. Tip: if bottoms match, the bigger top wins.</p>`;
+      <p style="font-size:15px;line-height:1.55;margin:0">¾ fills more than ½, so ¾ is bigger. <b>But this only works when the wholes are the same size!</b></p>`;
+  }
+  if(kind==="samewhole"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Big idea!</b> A fraction is only "bigger" if it's of the <b>same whole</b>. Of <b>different</b> wholes, the smaller-looking fraction can win!</p>
+      <div style="background:rgba(255,255,255,.04);border:2px solid var(--gold);border-radius:12px;padding:12px;margin:12px 0">
+        <p style="text-align:center;font-size:15px;line-height:1.9;margin:0">
+          ½ of 50 = <b style="color:var(--gold2)">25</b><br>
+          ¼ of 300 = <b style="color:var(--gold2)">75</b><br>
+          So ¼ of 300 is the <b>bigger amount</b> — even though ¼ looks smaller than ½!</p>
+      </div>
+      <p style="font-size:15px;line-height:1.55;margin:0">To compare amounts: <b>work out each one first</b> (fraction × the whole), then compare the results.</p>`;
   }
   if(kind==="numline"){
     return `<p style="font-size:15px;line-height:1.6">A fraction also lives on a <b>number line</b> between 0 and 1. The bottom number says how many equal steps; the top says how many steps along.</p>
@@ -1387,8 +1449,9 @@ function fracLessonContent(kind){
       <p style="font-size:15px;text-align:center;margin:0">One full circle (4/4) plus 1 more quarter = <span class="fracBig"><span>5</span><span class="b">4</span></span></p>`;
   }
   if(kind==="mixed_num"){
-    return `<p style="font-size:15px;line-height:1.6">A <b>mixed number</b> is a whole number and a fraction together, like 1½. To turn it into an improper fraction: <b>multiply the whole by the bottom, add the top</b>.</p>
-      <p style="font-size:16px;text-align:center;margin:12px 0">1½ → (1×2)+1 = 3 → <span class="fracBig"><span>3</span><span class="b">2</span></span></p>`;
+    return `<p style="font-size:15px;line-height:1.6">A <b>mixed number</b> is a whole and a fraction together, like 1½. <b>The trick:</b> every mixed number can <b>always</b> be written as an improper fraction — and that makes it much easier to calculate with!</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0"><b>Multiply</b> the whole by the bottom, then <b>add</b> the top:<br>1½ → (1×2)+1 = 3 → <span class="fracBig"><span>3</span><span class="b">2</span></span></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Whenever a sum has mixed numbers, turn them into improper fractions first — it always works!</p>`;
   }
   if(kind==="frac_of"){
     return `<p style="font-size:15px;line-height:1.6">To find a <b>fraction of a number</b>: divide by the bottom, then multiply by the top.</p>
@@ -1534,7 +1597,8 @@ function startFracTest(gentle){
 }
 function fracTestBuild(fresh){
   const t=session.ftest;
-  if(fresh){ t.queue=genFracSet(t.kind,10); }
+  const n = t.gentle ? 25 : 10;   // gentle route gives more practice
+  if(fresh){ t.queue=genFracSet(t.kind, n); }
   else { t.queue=t.missed.slice(); }
   t.idx=0; t.correct=0; t.total=t.queue.length; t.missed=[]; t.locked=false;
   fracTestNext();
@@ -1712,8 +1776,9 @@ function startStageTest(gentle){
 }
 function stageTestBuild(fresh){
   const k=session.kid, t=session.stest, s=t.stage.def, lv=t.lv;
+  const n = t.gentle ? 25 : 10;   // gentle route gives more practice
   if(fresh){
-    t.queue=genDistinctQs(k, lv.op, s.mixed?null:s.f, 10);
+    t.queue=genDistinctQs(k, lv.op, s.mixed?null:s.f, n);
   } else { t.queue=t.missed.slice(); }
   t.idx=0; t.correct=0; t.total=t.queue.length; t.missed=[]; t.locked=false;
   stageTestNext();
@@ -2254,7 +2319,7 @@ function twoBarSVG(n1,d1,n2,d2){
   </div>`;
 }
 function genFrac(kind){
-  if(kind==="any") kind=pick(["name","shade","build","parts","compare","numline","improper","mixed_num","frac_of","equiv_make","simplify","simplest"]);
+  if(kind==="any") kind=pick(["meet","parts","name","shade","build","compare","samewhole","numline","improper","mixed_num","frac_of","equiv_make","simplify","simplest"]);
   if(kind==="op_any") kind=pick(["add_same","sub_same","add_diff","sub_diff","mul","div"]);
   if(kind==="dp_any") kind=pick(["dec_read","dec_frac","dec_compare","pct_read","pct_frac","pct_of","convert","word"]);
   if(kind==="fm_any") kind=pick(["factors_of","is_factor","hcf","multiples_of","is_multiple","lcm"]);
@@ -2272,17 +2337,57 @@ function genFrac(kind){
     }
     return {kind, num, den, visual, prompt:`Type this fraction: ${num} out of ${den} equal parts`, answer:{num,den}, accept:"exact"};
   }
-  // ---- Compare two fractions (yes/no style via picking bigger) ----
+  // ---- Meet a fraction: numerator/denominator comprehension ----
+  if(kind==="meet"){
+    const {num,den}=randFrac();
+    const useShape=Math.random()<0.5;
+    const visual=useShape?fracPieSVG(num,den):fracBarSVG(num,den);
+    const askNum=Math.random()<0.5;
+    return {kind, num, den, visual,
+      prompt: askNum
+        ? `The TOP number is the <b>numerator</b> — the shaded parts. What is it here?`
+        : `The BOTTOM number is the <b>denominator</b> — the total equal parts. What is it here?`,
+      single:true, answer: askNum?num:den};
+  }
+  // ---- Compare two fractions (SAME whole — bars are equal size) ----
   if(kind==="compare"){
     let f1=randFrac(), f2=randFrac();
-    // avoid equal values
     while(f1.num*f2.den === f2.num*f1.den){ f2=randFrac(); }
     const firstBigger = f1.num*f2.den > f2.num*f1.den;
     return {kind, compare:true, f1, f2,
       visual:`<div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+        <div style="font-size:12px;color:var(--gold2);font-weight:700">Both bars are the SAME whole 👇</div>
         <div style="width:100%;text-align:center">${fracBarSVG(f1.num,f1.den,300)}<div class="muted" style="font-size:14px">A = ${f1.num}/${f1.den}</div></div>
         <div style="width:100%;text-align:center">${fracBarSVG(f2.num,f2.den,300)}<div class="muted" style="font-size:14px">B = ${f2.num}/${f2.den}</div></div></div>`,
-      prompt:"Which is bigger?", answer: firstBigger?"A":"B"};
+      prompt:"Which is bigger? (same-size whole)", answer: firstBigger?"A":"B"};
+  }
+  // ---- Same or different whole: the BIG idea (½ of 50 vs ¼ of 300) ----
+  if(kind==="samewhole"){
+    // two fractions OF two different amounts; the smaller-looking fraction can win
+    const opts=[
+      {f1:{n:1,d:2}, w1:50,  f2:{n:1,d:4}, w2:300},   // 25 vs 75 → B
+      {f1:{n:1,d:2}, w1:20,  f2:{n:1,d:3}, w2:60},    // 10 vs 20 → B
+      {f1:{n:3,d:4}, w1:40,  f2:{n:1,d:2}, w2:100},   // 30 vs 50 → B
+      {f1:{n:1,d:2}, w1:100, f2:{n:1,d:4}, w2:40},    // 50 vs 10 → A
+      {f1:{n:2,d:3}, w1:30,  f2:{n:1,d:4}, w2:40},    // 20 vs 10 → A
+      {f1:{n:1,d:4}, w1:80,  f2:{n:1,d:2}, w2:30}     // 20 vs 15 → A
+    ];
+    const o=pick(opts);
+    const a1=o.f1.n/o.f1.d*o.w1, a2=o.f2.n/o.f2.d*o.w2;
+    const aBigger=a1>a2;
+    return {kind, compare:true,
+      visual:`<div style="text-align:center">
+        <div style="font-size:13px;color:var(--gold2);font-weight:700;margin-bottom:8px">⚠️ Different wholes! Work out the real amount.</div>
+        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+          <div style="background:rgba(255,255,255,.04);border:2px solid var(--line);border-radius:12px;padding:12px 16px">
+            <div style="font-size:22px;font-weight:800">A</div>
+            <div style="font-size:17px"><span class="fracBig"><span>${o.f1.n}</span><span class="b">${o.f1.d}</span></span> of ${o.w1}</div></div>
+          <div style="background:rgba(255,255,255,.04);border:2px solid var(--line);border-radius:12px;padding:12px 16px">
+            <div style="font-size:22px;font-weight:800">B</div>
+            <div style="font-size:17px"><span class="fracBig"><span>${o.f2.n}</span><span class="b">${o.f2.d}</span></span> of ${o.w2}</div></div>
+        </div></div>`,
+      prompt:`Which is the bigger AMOUNT? Work out each one first!`,
+      answer: aBigger?"A":"B", _a1:a1, _a2:a2};
   }
   // ---- Number line: place a fraction 0..1 (type the fraction at the mark) ----
   if(kind==="numline"){
@@ -2585,6 +2690,7 @@ function genFracOp(kind){
 // signature of a fraction question, to detect duplicates within one round
 function fracSig(q){
   if(q.kind==="word") return "word:"+(q.prompt||"");
+  if(q.kind==="samewhole") return "samewhole:"+(q.visual||"").slice(0,80);
   if(q.compare) return q.kind+":"+(q.cmpA!=null?q.cmpA+"vs"+q.cmpB : q.f1.num+"/"+q.f1.den+"vs"+q.f2.num+"/"+q.f2.den);
   if(q.fracOp) return q.kind+":"+q.a.num+"/"+q.a.den+q.sym+q.b.num+"/"+q.b.den;
   if(q.isDecimal) return q.kind+":"+(q.answer.dec!=null?q.answer.dec:q.decVal)+":"+(q.prompt||"");
@@ -2665,6 +2771,7 @@ function fracInputHTML(q, ansFn){
     <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
 }
 function fracAnswerShown(q){
+  if(q.kind==="samewhole") return `${q.answer} is bigger (A=${q._a1}, B=${q._a2})`;
   if(q.compare) return q.answer==="A"?"A is bigger":"B is bigger";
   if(q.yesno) return q.answer;
   if(q.accept==="decimal") return q.answer.dec;
