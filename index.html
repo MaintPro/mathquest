@@ -260,6 +260,16 @@ function migrateDB(){
     if(!k.facts) k.facts={};
     if(k.stars==null) k.stars=0;
     if(!k.stageSpeed) k.stageSpeed={};  // levelId:stageIdx -> true once speed drill passed
+    // MASTERY RULE CHANGE (grandfathering): the new rule requires speed-clearing every stage
+    // for full mastery. Existing kids who already progressed must not be retroactively locked.
+    // For any stage a kid has already cleared, credit it as speed-mastered so their standing holds.
+    if(k.stageProgress && !k._masteryGrandfathered){
+      ["tables","division","fractions","factors","fracops","decimals"].forEach(lid=>{
+        const cleared = (k.stageProgress[lid]!=null)?k.stageProgress[lid]:-1;
+        for(let i=0;i<=cleared;i++){ k.stageSpeed[lid+":"+i]=true; }
+      });
+      k._masteryGrandfathered=true;
+    }
     if(!k.introSeen) k.introSeen={};
     if(!k.learnSeen) k.learnSeen={};
     // existing kids with progress in a learn-level aren't forced to redo the intro lesson
@@ -428,11 +438,20 @@ function stagesFor(levelId){
   return [];
 }
 function clearedStage(k,levelId){ return (k.stageProgress&&k.stageProgress[levelId]!=null)?k.stageProgress[levelId]:-1; }
+// A stage counts as TRULY mastered only if its speed drill was passed (not a gentle clear).
+function stageMastered(k, levelId, idx){ return !!(k.stageSpeed && k.stageSpeed[levelId+":"+idx]); }
+// A level is FULLY mastered only when every stage was speed-cleared (gentle clears don't count).
+function levelFullyMastered(k, levelId){
+  const stages=stagesFor(levelId); if(!stages.length) return false;
+  for(let i=0;i<stages.length;i++){ if(!stageMastered(k, levelId, i)) return false; }
+  return true;
+}
 function beltFor(k,levelId){
   const stages=stagesFor(levelId); if(!stages.length) return 0;
-  const cleared=clearedStage(k,levelId)+1; // count cleared
-  // map cleared count (0..stages.length) onto belt index (0..7)
-  return Math.min(BELTS.length-1, Math.round((cleared/stages.length)*(BELTS.length-1)));
+  // belts now reward TRUE mastery: count stages speed-cleared, not just gently cleared
+  let mastered=0;
+  for(let i=0;i<stages.length;i++){ if(stageMastered(k, levelId, i)) mastered++; }
+  return Math.min(BELTS.length-1, Math.round((mastered/stages.length)*(BELTS.length-1)));
 }
 
 /* ---- Learning path ---- */
@@ -469,7 +488,7 @@ function unlockEarned(){
       if(idx===0 || lv.soon) return;
       const prev=PATH[idx-1];
       const prevStages=stagesFor(prev.id);
-      const prevDone = prevStages.length>0 && clearedStage(k, prev.id) >= prevStages.length-1;
+      const prevDone = prevStages.length>0 && levelFullyMastered(k, prev.id);
       if(prevDone && k.levelsUnlocked.indexOf(lv.id)<0) k.levelsUnlocked.push(lv.id);
     });
   });
@@ -2103,23 +2122,25 @@ function stageTestBuild(fresh){
   const k=session.kid, t=session.stest, s=t.stage.def, lv=t.lv;
   const n = t.gentle ? 25 : 10;   // gentle route gives more practice
   if(fresh){
-    t.queue=genDistinctQs(k, lv.op, s.mixed?null:s.f, n);
+    t.queue=genDistinctQs(k, lv.op, s.mixed?null:s.f, n, !!s.mixed);
   } else { t.queue=t.missed.slice(); }
   t.idx=0; t.correct=0; t.total=t.queue.length; t.missed=[]; t.locked=false;
   stageTestNext();
 }
 // generate n questions with no repeated fact within the set (different every attempt & device)
-function genDistinctQs(k, op, fixed, n){
+// wideRange=true makes mixed mastery pull from the full 2..20 tables (real recall, not just 2..12)
+function genDistinctQs(k, op, fixed, n, wideRange){
   const out=[], seen={};
   let tries=0;
-  while(out.length<n && tries<n*30){
+  const savedRange=k.range;
+  if(wideRange && !fixed){ k.range={min:2,max:20}; }  // demanding mastery: all tables to 20
+  while(out.length<n && tries<n*40){
     session.q={op, fixed}; const q=genQ(k); tries++;
     if(!seen[q.key]){ seen[q.key]=1; out.push(q); }
   }
-  // small fact spaces (e.g. a single table has 12 facts) — top up allowing repeats if needed
   while(out.length<n){ session.q={op, fixed}; out.push(genQ(k)); }
   session.q=null;
-  // shuffle so order differs each time too
+  k.range=savedRange;  // always restore the child's own setting
   for(let i=out.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [out[i],out[j]]=[out[j],out[i]]; }
   return out;
 }
@@ -2198,7 +2219,7 @@ function startStageSpeed(){
 function stageSpeedBuild(fresh){
   const k=session.kid, sp=session.sspeed, s=sp.stage.def, lv=sp.lv;
   if(fresh){
-    sp.queue=genDistinctQs(k, lv.op, s.mixed?null:s.f, 10);
+    sp.queue=genDistinctQs(k, lv.op, s.mixed?null:s.f, 10, !!s.mixed);
   } else { sp.queue=sp.missed.slice(); }
   sp.idx=0; sp.correct=0; sp.total=sp.queue.length; sp.missed=[]; sp.locked=false;
   stageSpeedNext();
@@ -2282,9 +2303,13 @@ function clearStageNow(k, lv, st, gentle){
     if(!gentle) k.stageSpeed[lv.id+":"+st.idx]=true;
     const stages=stagesFor(lv.id);
     if(st.idx===stages.length-1){
-      levelDone=true;
-      const nxt=nextLevel(lv.id);
-      if(nxt && !nxt.soon && !isUnlocked(k,nxt.id)) k.levelsUnlocked.push(nxt.id);
+      // "Level done" for navigation, but only TRUE (speed-cleared) mastery unlocks the next level
+      const fullyMastered=levelFullyMastered(k, lv.id);
+      levelDone=fullyMastered;
+      if(fullyMastered){
+        const nxt=nextLevel(lv.id);
+        if(nxt && !nxt.soon && !isUnlocked(k,nxt.id)) k.levelsUnlocked.push(nxt.id);
+      }
     }
   }
   k.history.push({date:Date.now(), mode:'stage', topic:lv.name+" "+st.def.name, score:10, total:10, timeSec:0});
@@ -2292,15 +2317,25 @@ function clearStageNow(k, lv, st, gentle){
   if(levelDone) SND.master(); else SND.clear();
   const stages=stagesFor(lv.id);
   const nextStage=stages[st.idx+1];
+  // count stages still needing a speed drill for true mastery
+  let needSpeed=0;
+  for(let i=0;i<stages.length;i++){ if(i<=clearedStage(k,lv.id) && !stageMastered(k,lv.id,i)) needSpeed++; }
+  const masteryNote = (gentle && !levelDone)
+    ? `<div class="card" style="border-color:var(--gold)"><p class="center" style="margin:0;font-size:14px">🌱 Gentle clear done! To <b>fully master</b> this stage (and unlock what's next), come back and pass the <b>speed drill ⚡</b> too.</p></div>`
+    : (!levelDone && needSpeed>0 && st.idx===stages.length-1)
+      ? `<div class="card" style="border-color:var(--gold)"><p class="center" style="margin:0;font-size:14px">You've reached the end! But ${needSpeed} stage${needSpeed>1?'s':''} still need the <b>speed drill ⚡</b> to fully master ${lv.name} and unlock the next level.</p></div>`
+      : '';
   app.innerHTML=`
     <div class="card center" style="border-color:var(--green)">
       <div style="font-size:48px">${gentle?'🌱🎉':'🎉⚡'}</div>
       <h2>${st.def.name} cleared!</h2>
       <p class="muted">${gentle?'Nice work — stage cleared!':'Test ✅ and speed drill ⚡ both passed!'} &nbsp;·&nbsp; ${BELTS[beltFor(k,lv.id)]} Belt</p>
     </div>
+    ${masteryNote}
     ${levelDone?`<div class="card center" style="border-color:var(--gold)"><div style="font-size:40px">${lv.icon}🏆</div><h3>${lv.name} fully mastered!</h3>${nextLevel(lv.id)&&!nextLevel(lv.id).soon?`<p class="muted">${nextLevel(lv.id).name} is now unlocked.</p>`:''}</div>`:''}
     <div class="card center">
       ${nextStage?`<button class="btn gold" onclick="openStage(${st.idx+1})">Next: ${nextStage.name} →</button><div style="height:8px"></div>`:''}
+      ${(gentle && !stageMastered(k,lv.id,st.idx))?`<button class="btn gold" onclick="openStage(${st.idx})">⚡ Do the speed drill now</button><div style="height:8px"></div>`:''}
       <button class="btn ghost" onclick="screenLevel()">Back to stages</button>
     </div>`;
 }
@@ -3192,8 +3227,8 @@ function genQ(k){
   if(op==="÷"){
     // build a clean division: divisor b, quotient q -> dividend a = b*q
     let b, quo;
-    if(session.q && session.q.fixed){ b=session.q.fixed; quo=1+Math.floor(Math.random()*12); }
-    else { b=Math.max(2,rnd()); quo=1+Math.floor(Math.random()*12); }
+    if(session.q && session.q.fixed){ b=session.q.fixed; quo=1+Math.floor(Math.random()*20); }
+    else { b=Math.max(2,rnd()); quo=1+Math.floor(Math.random()*20); }
     const a=b*quo;            // dividend
     const ans=quo;
     const opts=new Set([ans]);
@@ -3208,7 +3243,7 @@ function genQ(k){
 
   // multiplication (default)
   let a=rnd(), b=rnd();
-  if(session.q && session.q.fixed){ a=session.q.fixed; b=1+Math.floor(Math.random()*12); }
+  if(session.q && session.q.fixed){ a=session.q.fixed; b=1+Math.floor(Math.random()*20); }
   const tricky=Object.entries(k.facts).filter(([key,f])=>f.wrong>0 && key.includes("x"));
   if(!(session.q&&session.q.fixed) && tricky.length && Math.random()<0.4){
     const pick=tricky[Math.floor(Math.random()*tricky.length)][0].split("x");
