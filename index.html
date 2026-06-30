@@ -1355,8 +1355,8 @@ function lessonNarration(kind, mixed){
     // fractions — equivalent & simplify
     equiv_see:"Equivalent fractions look different but shade the same amount. Like one half and two quarters!",
     equiv_make:"To make an equal fraction, multiply the top and the bottom by the same number.",
-    simplify:"To simplify, divide the top and bottom by the same number until it can't go smaller.",
-    simplest:"A fraction is simplest when no number bigger than one divides both the top and bottom.",
+    simplify:"To simplify, divide the top and bottom by the same number until it can't go smaller. And here's the golden rule — always give your answer in its simplest form!",
+    simplest:"A fraction is simplest when no number bigger than one divides both the top and bottom. Always simplify your answer before you write it down — it's a habit every good mathematician has!",
     // factors & multiples
     factors_of:"A factor divides a number evenly, with nothing left over. Let's find one!",
     is_factor:"To check a factor, divide and see if there's a remainder. No remainder means yes!",
@@ -1403,14 +1403,20 @@ function fracLessonContent(kind){
   if(kind==="simplify"){
     return `<p style="font-size:15px;line-height:1.6"><b>Simplifying</b> is the opposite — <b>divide the top and bottom by the same number</b> to make it as small as possible.</p>
       <p style="font-size:16px;text-align:center;margin:12px 0"><span class="fracBig"><span>6</span><span class="b">8</span></span> = <b>6÷2</b> / <b>8÷2</b> = <span class="fracBig"><span>3</span><span class="b">4</span></span></p>
-      <p style="font-size:15px;line-height:1.55;margin:0">Keep dividing until no number (except 1) divides both. Then it's in <b>simplest form</b>.</p>`;
+      <p style="font-size:15px;line-height:1.55;margin:0 0 12px">Keep dividing until no number (except 1) divides both. Then it's in <b>simplest form</b>.</p>
+      <div style="background:rgba(255,210,63,.12);border:2px solid var(--gold);border-radius:12px;padding:12px;margin:4px 0 0">
+        <p style="font-size:15px;line-height:1.6;margin:0">⭐ <b>The golden rule:</b> always give your fraction answer in its <b>simplest form</b>. For example, if you work out 2/4, write it as <b>½</b>. A simplified answer is the "proper" answer mathematicians look for!</p>
+      </div>`;
   }
   if(kind==="simplest"){
     return `<p style="font-size:15px;line-height:1.6">A fraction is in <b>simplest form</b> when no number bigger than 1 divides both the top and bottom.</p>
       <ul style="font-size:15px;line-height:1.6;padding-left:20px">
         <li>¾ — simplest ✅ (nothing divides both 3 and 4)</li>
         <li>2/4 — not simplest ❌ (both divide by 2 → ½)</li>
-      </ul>`;
+      </ul>
+      <div style="background:rgba(255,210,63,.12);border:2px solid var(--gold);border-radius:12px;padding:12px;margin:8px 0 0">
+        <p style="font-size:15px;line-height:1.55;margin:0">⭐ <b>Remember:</b> always simplify your answer before you write it down. It's a habit every good mathematician has!</p>
+      </div>`;
   }
   if(kind==="meet"){
     return `<p style="font-size:15px;line-height:1.6">Every fraction has <b>two numbers</b>, and each has a special name and job:</p>
