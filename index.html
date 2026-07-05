@@ -2124,7 +2124,7 @@ function fracTestAns(yn){
   const k=session.kid, t=session.ftest, q=t.current;
   if(t.locked) return;
   let gotN, gotD="";
-  if(q.yesno||q.compare){ gotN=yn; }
+  if(q.yesno||q.compare||q.choicesFixed){ gotN=yn; }
   else {
     const oneField = q.single || q.accept==="decimal";
     gotN=$("fnum")?$("fnum").value:""; gotD=$("fden")?$("fden").value:"";
@@ -3040,7 +3040,7 @@ function genInteger(kind){
   if(kind==="iz_line"){
     // arrow shown on the line, type the integer
     const lo=-8, hi=8; const t=R(-7,7);
-    return {kind, integer:true, single:true,
+    return {kind, integer:true, single:true, allowNeg:true,
       visual:intLineSVG(lo,hi,t)+`<p class="center muted" style="font-size:13px">What number is the green arrow on?</p>`,
       prompt:`What integer is the arrow pointing to?`, answer:t};
   }
@@ -3367,6 +3367,12 @@ function fracIsSimplest(q, gotNum, gotDen){
 }
 /* shared: input UI for a fraction question (handles yes/no, single, fraction) */
 function fracInputHTML(q, ansFn){
+  if(q.choicesFixed){
+    // integer meet: tappable word choices (Positive / Negative / Zero) — no Check button
+    return `<div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap">
+      ${q.choicesFixed.map(o=>`<button class="opt" style="min-width:110px" onclick="${ansFn}('${o}')">${o}</button>`).join("")}
+      </div>`;
+  }
   if(q.compare){
     return `<div class="row" style="justify-content:center;gap:12px">
       <button class="opt" style="width:120px" onclick="${ansFn}('A')">A is bigger</button>
@@ -3403,6 +3409,7 @@ function toggleSign(){
   SND.tap();
 }
 function fracAnswerShown(q){
+  if(q.choicesFixed) return q.answer;   // iz_meet: Positive/Negative/Zero
   if(q.kind==="samewhole") return `${q.answer} is bigger (A=${q._a1}, B=${q._a2})`;
   if(q.compare) return q.answer==="A"?"A is bigger":"B is bigger";
   if(q.yesno) return q.answer;
