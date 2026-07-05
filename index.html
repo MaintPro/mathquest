@@ -484,6 +484,23 @@ function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+(d.getMonth(
 function unlockEarned(){
   (DB.kids||[]).forEach(k=>{
     if(!k.levelsUnlocked) k.levelsUnlocked=["tables"];
+    // ONE-TIME FIX: Operations & Decimals mastery tests used to show the wrong (fractions)
+    // questions, so that "mastery" wasn't real. Reset just those two final mastery stages
+    // so kids re-earn them with the correct test. Runs here (after stage arrays exist).
+    if(!k._opDecMasteryReset){
+      if(!k.stageSpeed) k.stageSpeed={};
+      ["fracops","decimals"].forEach(lid=>{
+        const stages=stagesFor(lid);
+        const lastIdx=stages.length-1;
+        if(stages[lastIdx] && stages[lastIdx].mixed){
+          delete k.stageSpeed[lid+":"+lastIdx];
+          if(k.stageProgress && k.stageProgress[lid]!=null && k.stageProgress[lid]>=lastIdx){
+            k.stageProgress[lid]=lastIdx-1;
+          }
+        }
+      });
+      k._opDecMasteryReset=true;
+    }
     PATH.forEach((lv, idx)=>{
       if(idx===0 || lv.soon) return;
       const prev=PATH[idx-1];
@@ -3147,7 +3164,12 @@ function fracCorrectLabel(q){
   if(q.yesno) return q.answer;              // "yes" / "no"
   if(q.accept==="decimal") return ""+q.answer.dec;
   if(q.single) return ""+q.answer;          // number
-  // for fractions, the simplest form is the canonical label
+  // "make an equivalent (but different)" — the correct choice must be a DIFFERENT equivalent
+  if(q.accept==="equivNotSame"){
+    const s=simplest(q.answer.num,q.answer.den);
+    return (s.num*2)+"/"+(s.den*2);         // e.g. 3/4 -> 6/8
+  }
+  // for other fractions, the simplest form is the canonical label
   const s=simplest(q.answer.num,q.answer.den);
   return s.num+"/"+s.den;
 }
@@ -3198,6 +3220,12 @@ function fracChoiceCorrect(q, val){
   if(q.accept==="decimal") return Math.abs(parseFloat(val)-q.answer.dec)<0.001;
   if(q.single) return parseInt(val)===q.answer;
   const [a,b]=val.split("/").map(Number);
+  // "make a DIFFERENT equivalent": must be equal in value but NOT the identical original
+  if(q.accept==="equivNotSame"){
+    const equalValue = a*q.answer.den===q.answer.num*b;
+    const sameAsOriginal = (a===q.answer.num && b===q.answer.den);
+    return equalValue && !sameAsOriginal;
+  }
   return a*q.answer.den===q.answer.num*b;
 }
 /* ======================================================================== */
