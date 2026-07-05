@@ -1935,7 +1935,9 @@ function fracLesson(){
 }
 function startFracTest(gentle){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
-  const kind = s.mixed?"any":s.kind;
+  // Use the stage's OWN kind. Mixed stages already carry the right pool:
+  // fractions→"any", operations→"op_any", decimals→"dp_any", factors→"fm_any".
+  const kind = s.kind;
   session.ftest={lv, stage:st, kind, attempt:1, maxAttempts:4, queue:null, missed:[], correct:0, total:10, gentle:!!gentle};
   fracTestBuild(true);
 }
@@ -2023,7 +2025,7 @@ function fracTestEnd(){
 /* ---- Fraction speed drill: read + type in time, all 10, retry missed ---- */
 function startFracSpeed(){
   const k=session.kid, lv=session.level, st=session.stage;
-  const kind = st.def.mixed?"any":st.def.kind;
+  const kind = st.def.kind;   // stage carries the correct pool (any / op_any / dp_any / fm_any)
   session.fspeed={lv, stage:st, kind, speedSec:k.fracSpeedSec||8, queue:null, missed:[], correct:0};
   fracSpeedBuild(true);
 }
