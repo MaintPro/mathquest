@@ -435,6 +435,9 @@ function stagesFor(levelId){
   if(levelId==="decimals"){
     return DECIMAL_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
   }
+  if(levelId==="integers"){
+    return INTEGER_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
+  }
   return [];
 }
 function clearedStage(k,levelId){ return (k.stageProgress&&k.stageProgress[levelId]!=null)?k.stageProgress[levelId]:-1; }
@@ -461,7 +464,8 @@ const PATH = [
   {id:"fractions",name:"Fractions",    icon:"🍕", op:"f", desc:"Parts of a whole"},
   {id:"factors",  name:"Factors & Multiples", icon:"🔑", op:"fm", desc:"HCF, LCM — the keys to fractions"},
   {id:"fracops",  name:"Fraction Operations", icon:"🧮", op:"fo", desc:"Add, subtract, multiply, divide"},
-  {id:"decimals", name:"Decimals & %", icon:"💯", op:"dp", desc:"Decimals, percentages & word problems"}
+  {id:"decimals", name:"Decimals & %", icon:"💯", op:"dp", desc:"Decimals, percentages & word problems"},
+  {id:"integers", name:"Integers", icon:"➕➖", op:"iz", desc:"Negative numbers & the number line"}
 ];
 function levelById(id){ return PATH.find(l=>l.id===id); }
 function nextLevel(id){ const i=PATH.findIndex(l=>l.id===id); return PATH[i+1]||null; }
@@ -576,6 +580,21 @@ const DECIMAL_STAGES = [
   // Final — Word problems then master
   {id:"word",       name:"Word Problems",         kind:"word",       desc:"Real-life maths"},
   {id:"dp_mixed",   name:"Decimal & % Master",    kind:"dp_any",     desc:"All mixed", mixed:true}
+];
+
+const INTEGER_STAGES = [
+  // Chapter 1 — Understanding negatives
+  {id:"iz_meet",     name:"What's a Negative?",   kind:"iz_meet",     desc:"Numbers below zero"},
+  {id:"iz_line",     name:"On the Number Line",   kind:"iz_line",     desc:"Find the integer"},
+  {id:"iz_realworld",name:"Real-Life Negatives",  kind:"iz_realworld",desc:"Temperature, money, floors"},
+  // Chapter 2 — Comparing & ordering
+  {id:"iz_compare",  name:"Which is Bigger?",     kind:"iz_compare",  desc:"−3 vs 2"},
+  {id:"iz_order",    name:"Order the Integers",   kind:"iz_order",    desc:"Smallest to biggest"},
+  // Chapter 3 — Adding & subtracting
+  {id:"iz_add",      name:"Adding Integers",      kind:"iz_add",      desc:"−3 + 5"},
+  {id:"iz_sub",      name:"Subtracting Integers", kind:"iz_sub",      desc:"2 − 5, and 3 − (−2)"},
+  // Final
+  {id:"iz_mixed",    name:"Integers Master",      kind:"iz_any",      desc:"All mixed", mixed:true}
 ];
 
 let session = {}; // active kid + quiz state
@@ -976,7 +995,8 @@ function hasLearn(levelId){ return LEARN_FOR_LEVEL[levelId] && LEARN_FOR_LEVEL[l
 const LEARN_FOR_LEVEL = {
   fractions: [{id:"fractions", name:"What is a Fraction?"},{id:"equiv", name:"Equivalent Fractions"}],
   factors:   [{id:"factors", name:"Discover Factors"},{id:"multiples", name:"Multiples & LCM"}],
-  fracops:   [{id:"addsame", name:"Adding (same bottom)"},{id:"adddiff", name:"Adding (different bottoms)"}]
+  fracops:   [{id:"addsame", name:"Adding (same bottom)"},{id:"adddiff", name:"Adding (different bottoms)"}],
+  integers:  [{id:"iz_negatives", name:"Meet Negative Numbers"},{id:"iz_addsub", name:"Adding & Subtracting"}]
 };
 function startLearn(topicId){
   if(!LEARN_TOPICS[topicId]) return screenLevel();
@@ -1102,6 +1122,39 @@ function tapChoiceHit(id, val, correct, el){
   } else {
     el.style.background="linear-gradient(180deg,#ff8a8a,#e0444b)"; SND.wrong();
     setTimeout(()=>{ el.style.background="var(--bg2)"; }, 400);
+  }
+}
+
+// an interactive number line: child taps the target integer; wrong taps flash red
+function tapNumberLine(lo, hi, target, id){
+  const w=340, pad=20, span=hi-lo, step=(w-2*pad)/span;
+  let ticks="";
+  for(let v=lo; v<=hi; v++){
+    const x=pad+(v-lo)*step;
+    const zero=(v===0);
+    ticks+=`<button data-v="${v}" onclick="tapNumberLineHit('${id}',${v},${target},this)"
+      style="position:absolute;left:${x}px;top:12px;transform:translateX(-50%);width:26px;height:40px;
+      border:none;background:transparent;cursor:pointer;padding:0;color:${zero?'#ffd23f':'#8fa6c4'};font-weight:800;font-size:12px">
+      <span style="display:block;width:2px;height:14px;margin:0 auto;background:${zero?'#ffd23f':'#5b6b86'}"></span>${v}</button>`;
+  }
+  return `<div id="${id}" style="position:relative;height:66px;max-width:${w}px;margin:12px auto">
+      <div style="position:absolute;left:${pad}px;right:${pad}px;top:18px;height:2px;background:#5b6b86"></div>
+      ${ticks}
+    </div>`;
+}
+function tapNumberLineHit(id, v, target, el){
+  const box=$(id); if(!box || box.dataset.done) return;
+  if(v===target){
+    box.dataset.done="1";
+    el.querySelector('span').style.background="#3ddc97";
+    el.style.color="#3ddc97";
+    const dot=document.createElement('div');
+    dot.style.cssText="position:absolute;left:"+el.style.left+";top:2px;width:12px;height:12px;border-radius:50%;background:#3ddc97;transform:translateX(-50%)";
+    box.appendChild(dot);
+    learnActionDone();
+  } else {
+    el.style.color="#ff8a8a"; SND.wrong();
+    setTimeout(()=>{ if(!box.dataset.done) el.style.color="#8fa6c4"; }, 400);
   }
 }
 
@@ -1234,6 +1287,44 @@ const LEARN_TOPICS = {
      interactive:true,
      render:()=>mascotSay("½ changed into sixths — what's the new <b>top</b>?","happy")+
        tapChoice([{label:"3",val:"3"},{label:"1",val:"1"},{label:"6",val:"6"}],"3","learnDiffQ")}
+  ],
+  iz_negatives: ()=>[
+    {title:"Below zero", say:"Let's meet negative numbers. You already know numbers going up: one, two, three. But numbers also go the other way, below zero! We call those negative, and we write them with a minus sign.",
+     render:()=>mascotSay("Numbers don't stop at zero — they keep going <b>below</b> it! Those are <b>negative</b>.","happy")+
+       intLineSVG(-6,6,null)},
+    {title:"Like a thermometer", say:"Think of a thermometer. Above zero it's warm. Below zero it's freezing! Minus three degrees is colder than minus one. Negative numbers are all around us.",
+     render:()=>mascotSay("A thermometer goes below zero — <b>−3°</b> is freezing cold! 🌡️","happy")+
+       `<div class="center" style="font-size:17px;margin:12px 0;line-height:1.9">🔥 +5° warm<br>❄️ −5° freezing<br><span class="muted" style="font-size:14px">money owed, floors underground, and depths work the same way</span></div>`},
+    {title:"Your turn — tap −4", say:"Let's find one on the number line. Tap the spot where negative four is. Remember, negatives are to the left of zero!",
+     interactive:true,
+     render:()=>mascotSay("Tap <b>−4</b> on the line (left of zero!).","happy")+
+       tapNumberLine(-8,8,-4,"learnIzLine")},
+    {title:"Comparing negatives", say:"Here's the tricky part. Which is bigger, negative two or negative five? Negative two! Because it's further right, closer to zero. The bigger a negative looks, the smaller it actually is.",
+     render:()=>mascotSay("Careful! <b>−2 is bigger than −5</b> — it's closer to zero. 🤔","cheer")+
+       intLineSVG(-6,6,null)+`<p class="center" style="font-size:15px;margin:6px 0 0">−2 is warmer than −5, so −2 is bigger</p>`},
+    {title:"Your turn", say:"Quick check! Which is bigger: negative three, or negative one? Tap the bigger one.",
+     interactive:true,
+     render:()=>mascotSay("Which is <b>bigger</b>?","happy")+
+       tapChoice([{label:"−1",val:"-1"},{label:"−3",val:"-3"}],"-1","learnIzCmp")}
+  ],
+  iz_addsub: ()=>[
+    {title:"Walking the line", say:"Adding and subtracting integers is like walking along the number line. Start at your first number. To add, walk right. To subtract, walk left.",
+     render:()=>mascotSay("Adding = walk <b>right →</b>. Subtracting = walk <b>left ←</b>.","happy")+
+       intLineSVG(-8,8,2)},
+    {title:"Adding a negative", say:"What about adding a negative? Adding negative three means walking three steps LEFT. So five plus negative three lands on two.",
+     render:()=>mascotSay("Adding a <b>negative</b> walks <b>left</b>! 5 + (−3) = <b>2</b>.","happy")+
+       intLineSVG(-8,8,2)+`<p class="center" style="font-size:16px;margin:6px 0 0">Start at 5, walk 3 left → 2</p>`},
+    {title:"Your turn — solve −2 + 5", say:"You try! Start at negative two and walk five steps right. Where do you land? Tap the answer.",
+     interactive:true,
+     render:()=>mascotSay("<b>−2 + 5</b> — start at −2, walk 5 right. Where do you land?","happy")+
+       intLineSVG(-8,8,-2)+tapChoice([{label:"3",val:"3"},{label:"7",val:"7"},{label:"−7",val:"-7"}],"3","learnIzAdd")},
+    {title:"The big trick", say:"Now the trick everyone loves. Subtracting a negative is the same as adding! Three minus negative two becomes three plus two, which is five. Two minus signs make a plus.",
+     render:()=>mascotSay("🔑 Subtracting a negative = <b>adding</b>! 3 − (−2) = 3 + 2 = <b>5</b>. Two minuses make a plus!","cheer")+
+       `<div class="card" style="border-color:var(--gold);margin-top:8px"><p class="center" style="font-size:19px;margin:0">3 − (−2) = 3 + 2 = <b style="color:#3ddc97">5</b></p></div>`},
+    {title:"Your turn", say:"Last check! What is four minus negative one? Remember, minus a negative becomes plus. Tap the answer.",
+     interactive:true,
+     render:()=>mascotSay("<b>4 − (−1)</b> = ? (minus a negative = plus!)","happy")+
+       tapChoice([{label:"5",val:"5"},{label:"3",val:"3"},{label:"−5",val:"-5"}],"5","learnIzSub")}
   ]
 };
 
@@ -1647,7 +1738,7 @@ function openStage(i){
 }
 function stageLesson(){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
-  if(lv.id==="fractions"||lv.id==="fracops"||lv.id==="decimals"||lv.id==="factors") return fracLesson();
+  if(lv.id==="fractions"||lv.id==="fracops"||lv.id==="decimals"||lv.id==="factors"||lv.id==="integers") return fracLesson();
   let body;
   if(s.mixed){
     body=`<p style="font-size:15px;line-height:1.6">This is the big one — <b>all of them mixed together</b>. No single pattern to lean on; you just need to know your ${lv.name.toLowerCase()}. Take your time, and use the tricks you've learned for each one.</p>
@@ -1715,6 +1806,13 @@ function lessonNarration(kind, mixed){
     multiples_of:"A multiple is what you get when you skip-count. Just like a times table!",
     is_multiple:"A number is a multiple if you can reach it by skip-counting.",
     lcm:"The lowest common multiple is the smallest number in both lists. It's the key to adding fractions!",
+    iz_meet:"Integers can be positive, negative, or zero. Negative numbers live below zero and we write them with a minus sign. Left of zero is negative, right of zero is positive!",
+    iz_line:"On a number line, numbers get smaller to the left and bigger to the right. Zero sits in the middle.",
+    iz_realworld:"Negative numbers are everywhere! Temperature below zero, money you owe, floors below the ground, or being under the sea.",
+    iz_compare:"To compare integers, the one further right on the number line is bigger. Careful — negative two is bigger than negative five, because it's closer to zero!",
+    iz_order:"To order integers, line them up from most negative on the left, to biggest on the right.",
+    iz_add:"To add integers, walk along the number line. Start at the first number. Adding a positive moves right, and adding a negative moves left!",
+    iz_sub:"When subtracting, taking away moves left. And here's the big trick: subtracting a negative is the same as adding! Two minuses make a plus.",
     // fraction operations
     add_same:"When the bottoms are the same, just add the tops and keep the bottom!",
     sub_same:"When the bottoms match, subtract the tops and keep the bottom.",
@@ -1851,6 +1949,46 @@ function fracLessonContent(kind){
   if(kind==="word"){
     return `<p style="font-size:15px;line-height:1.6">Word problems hide the maths in a story. Read carefully, find the numbers, and decide: is it a fraction, a percent, or "how many"?</p>
       <p style="font-size:15px;line-height:1.55;margin:8px 0 0"><b>Example:</b> "Sam ate 3 of 12 slices." → 3/12 = ¼ of the pizza.</p>`;
+  }
+  if(kind==="iz_meet"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Integers</b> are whole numbers that can be <b>positive</b>, <b>negative</b>, or <b>zero</b>. Negative numbers are <b>below zero</b> — we write them with a minus sign.</p>
+      <div class="center" style="font-size:22px;font-weight:800;margin:12px 0">
+        <span style="color:#ff8a8a">−3  −2  −1</span> &nbsp;<span style="color:#ffd23f">0</span>&nbsp; <span style="color:#5ee0ff">1  2  3</span></div>
+      <p style="font-size:15px;line-height:1.55;margin:0">Left of zero = negative (−). Right of zero = positive (+).</p>`;
+  }
+  if(kind==="iz_line"){
+    return `<p style="font-size:15px;line-height:1.6">On a <b>number line</b>, numbers get <b>smaller</b> to the left and <b>bigger</b> to the right. Zero sits in the middle.</p>
+      ${intLineSVG(-6,6,-3)}
+      <p style="font-size:15px;text-align:center;margin:0">The arrow is 3 steps LEFT of zero → <b style="color:#ff8a8a">−3</b></p>`;
+  }
+  if(kind==="iz_realworld"){
+    return `<p style="font-size:15px;line-height:1.6">Negative numbers are everywhere in real life:</p>
+      <ul style="font-size:15px;line-height:1.7;padding-left:20px">
+        <li>🌡️ <b>Temperature:</b> 3° below zero = <b style="color:#ff8a8a">−3</b></li>
+        <li>💰 <b>Money owed:</b> you owe $5 = <b style="color:#ff8a8a">−5</b></li>
+        <li>🏢 <b>Floors:</b> 2 below ground = <b style="color:#ff8a8a">−2</b></li>
+        <li>🌊 <b>Below sea level:</b> 7 m down = <b style="color:#ff8a8a">−7</b></li>
+      </ul>`;
+  }
+  if(kind==="iz_compare"){
+    return `<p style="font-size:15px;line-height:1.6">To compare integers, think of the number line. The one <b>further right</b> is <b>bigger</b>.</p>
+      ${intLineSVG(-6,6,null)}
+      <p style="font-size:15px;line-height:1.55;margin:8px 0 0"><b>Careful:</b> −2 is bigger than −5! (−2 is warmer than −5°.) With negatives, the one <b>closer to zero</b> is bigger.</p>`;
+  }
+  if(kind==="iz_order"){
+    return `<p style="font-size:15px;line-height:1.6">To order integers, put them in number-line order: most negative first (far left), up to the biggest (far right).</p>
+      <p style="font-size:15px;text-align:center;margin:12px 0">−5, −2, 0, 3, 6 &nbsp;✅<br><span class="muted" style="font-size:14px">smallest (most negative) → biggest</span></p>`;
+  }
+  if(kind==="iz_add"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Adding integers</b> — walk along the number line. Start at the first number. Adding a <b>positive moves RIGHT</b>; adding a <b>negative moves LEFT</b>.</p>
+      ${intLineSVG(-8,8,-3)}
+      <p style="font-size:15px;text-align:center;margin:8px 0 0">−3 + 5: start at −3, move 5 right → <b style="color:#3ddc97">2</b></p>`;
+  }
+  if(kind==="iz_sub"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Subtracting integers.</b> Taking away moves LEFT: 2 − 5 = <b style="color:#ff8a8a">−3</b>.</p>
+      <div style="background:rgba(255,210,63,.12);border:2px solid var(--gold);border-radius:12px;padding:12px;margin:10px 0">
+        <p style="font-size:15px;line-height:1.6;margin:0">⭐ <b>The big trick:</b> subtracting a <b>negative</b> is the same as <b>adding</b>! <br>3 − (−2) = 3 + 2 = <b style="color:#3ddc97">5</b>. Two minuses make a plus!</p>
+      </div>`;
   }
   if(kind==="factors_of"){
     return `<p style="font-size:15px;line-height:1.6">A <b>factor</b> is a number that divides into another number <b>evenly</b> (no remainder).</p>
@@ -1991,6 +2129,8 @@ function fracTestAns(yn){
     const oneField = q.single || q.accept==="decimal";
     gotN=$("fnum")?$("fnum").value:""; gotD=$("fden")?$("fden").value:"";
     if(gotN===""||(!oneField && gotD==="")) return toast(q.accept==="decimal"?"Type the decimal first":"Type the fraction first");
+    // integer answers: apply the +/- sign toggle
+    if(q.allowNeg && $("fsign") && $("fsign").textContent==="−"){ gotN = "-"+gotN; }
   }
   t.locked=true;
   const fb=$("fb");
@@ -2702,6 +2842,10 @@ function genFrac(kind){
   if(kind==="op_any") kind=pick(["add_same","sub_same","add_diff","sub_diff","mul","div"]);
   if(kind==="dp_any") kind=pick(["dec_read","dec_frac","dec_compare","pct_read","pct_frac","pct_of","convert","word"]);
   if(kind==="fm_any") kind=pick(["factors_of","is_factor","hcf","multiples_of","is_multiple","lcm"]);
+  if(kind==="iz_any") kind=pick(["iz_meet","iz_line","iz_realworld","iz_compare","iz_order","iz_add","iz_sub"]);
+  if(kind==="iz_meet"||kind==="iz_line"||kind==="iz_realworld"||kind==="iz_compare"||kind==="iz_order"||kind==="iz_add"||kind==="iz_sub"){
+    return genInteger(kind);
+  }
   // ---- Understanding kinds ----
   if(kind==="name" || kind==="shade" || kind==="build" || kind==="parts"){
     const {num,den}=randFrac();
@@ -2862,6 +3006,98 @@ function genFrac(kind){
 function factorsOf(n){ const f=[]; for(let i=1;i<=n;i++) if(n%i===0) f.push(i); return f; }
 function hcfOf(a,b){ return gcd(a,b); }
 function lcmOf(a,b){ return a*b/gcd(a,b); }
+// ---- Integer number line SVG (marks from lo..hi, arrow at target) ----
+function intLineSVG(lo, hi, target, hideTarget){
+  const w=320, pad=18, span=hi-lo, step=(w-2*pad)/span;
+  const x=v=>pad+(v-lo)*step;
+  let ticks="";
+  for(let v=lo; v<=hi; v++){
+    const on=(v===0);
+    ticks+=`<line x1="${x(v)}" y1="34" x2="${x(v)}" y2="${on?46:42}" stroke="${on?'#ffd23f':'#5b6b86'}" stroke-width="${on?3:2}"/>`;
+    ticks+=`<text x="${x(v)}" y="60" font-size="11" fill="${on?'#ffd23f':'#8fa6c4'}" text-anchor="middle">${v}</text>`;
+  }
+  let arrow="";
+  if(target!=null && !hideTarget){
+    arrow=`<polygon points="${x(target)-6},20 ${x(target)+6},20 ${x(target)},33" fill="#3ddc97"/>
+           <circle cx="${x(target)}" cy="38" r="5" fill="#3ddc97" stroke="#06281e" stroke-width="1.5"/>`;
+  }
+  return `<div class="center" style="margin:10px 0"><svg viewBox="0 0 ${w} 70" width="100%" style="max-width:340px">
+    <line x1="${pad}" y1="38" x2="${w-pad}" y2="38" stroke="#5b6b86" stroke-width="2"/>
+    ${ticks}${arrow}</svg></div>`;
+}
+// ---- Integer questions ----
+function genInteger(kind){
+  const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+  if(kind==="iz_meet"){
+    // comprehension: is this number positive, negative, or zero? / what is below zero
+    const n=R(-9,9);
+    const opts=["Positive","Negative","Zero"];
+    const ans = n>0?"Positive":n<0?"Negative":"Zero";
+    return {kind, integer:true, choicesFixed:opts,
+      visual:`<div style="font-size:40px;font-weight:800;text-align:center;color:${n<0?'#ff8a8a':n>0?'#5ee0ff':'#ffd23f'}">${n}</div>`,
+      prompt:`Is ${n} positive, negative, or zero?`, answer:ans};
+  }
+  if(kind==="iz_line"){
+    // arrow shown on the line, type the integer
+    const lo=-8, hi=8; const t=R(-7,7);
+    return {kind, integer:true, single:true,
+      visual:intLineSVG(lo,hi,t)+`<p class="center muted" style="font-size:13px">What number is the green arrow on?</p>`,
+      prompt:`What integer is the arrow pointing to?`, answer:t};
+  }
+  if(kind==="iz_realworld"){
+    const scenarios=[
+      {q:"The temperature is 3 degrees below zero. Write it as an integer.", a:-3},
+      {q:"You owe a friend $5. Write your balance as an integer.", a:-5},
+      {q:"A submarine is 7 metres below sea level. Write its height as an integer.", a:-7},
+      {q:"The lift goes to floor 2 below ground. Write it as an integer.", a:-2},
+      {q:"It is 4 degrees above zero. Write it as an integer.", a:4},
+      {q:"You have $6 saved. Write it as an integer.", a:6},
+      {q:"A diver is 9 metres under the water. Write their depth as an integer.", a:-9},
+      {q:"The mountain top is 8 metres above sea level. Write it as an integer.", a:8},
+      {q:"The freezer is 6 degrees below zero. Write it as an integer.", a:-6}
+    ];
+    const s=pick(scenarios);
+    return {kind, integer:true, single:true, allowNeg:true,
+      visual:`<div style="font-size:16px;text-align:center;line-height:1.5;padding:6px">${s.q}</div>`,
+      prompt:s.q, answer:s.a};
+  }
+  if(kind==="iz_compare"){
+    let a=R(-9,9), b=R(-9,9); while(a===b){ b=R(-9,9); }
+    const aBigger=a>b;
+    return {kind, integer:true, compare:true,
+      visual:intLineSVG(-9,9,null)+`<div style="display:flex;gap:16px;justify-content:center;margin-top:6px">
+        <div style="font-size:26px;font-weight:800">A = ${a}</div><div style="font-size:26px;font-weight:800">B = ${b}</div></div>
+        <p class="center muted" style="font-size:13px">Further RIGHT on the line = bigger</p>`,
+      prompt:`Which is bigger? A = ${a} or B = ${b}?`, answer:aBigger?"A":"B", _a:a, _b:b};
+  }
+  if(kind==="iz_order"){
+    // pick 3 integers, ask for the SMALLEST (single answer)
+    const set=new Set(); while(set.size<3){ set.add(R(-9,9)); }
+    const arr=[...set]; const smallest=Math.min(...arr);
+    return {kind, integer:true, single:true, allowNeg:true,
+      visual:`<div style="display:flex;gap:14px;justify-content:center;margin:10px 0">${arr.map(n=>`<span style="font-size:28px;font-weight:800;color:${n<0?'#ff8a8a':'#5ee0ff'}">${n}</span>`).join("")}</div>`,
+      prompt:`Which is the SMALLEST? ${arr.join(", ")}`, answer:smallest};
+  }
+  if(kind==="iz_add"){
+    // a + b where results can be negative; keep numbers modest
+    let a=R(-9,9), b=R(-9,9);
+    const ans=a+b;
+    const bStr = b<0? `(${b})` : `${b}`;
+    return {kind, integer:true, single:true, allowNeg:true,
+      visual:intLineSVG(-12,12,a,true)+`<div style="font-size:26px;font-weight:800;text-align:center">${a} + ${bStr} = ?</div>
+        <p class="center muted" style="font-size:13px">Start at ${a}. Adding ${b<0?'moves LEFT':'moves RIGHT'} ${Math.abs(b)}.</p>`,
+      prompt:`${a} + ${bStr} = ?`, answer:ans};
+  }
+  // iz_sub — includes subtracting a negative
+  let a=R(-9,9), b=R(-9,9);
+  const ans=a-b;
+  const bStr = b<0? `(${b})` : `${b}`;
+  return {kind:"iz_sub", integer:true, single:true, allowNeg:true,
+    visual:`<div style="font-size:26px;font-weight:800;text-align:center;margin:10px 0">${a} − ${bStr} = ?</div>
+      ${b<0?`<p class="center" style="font-size:14px;color:var(--gold2)">Subtracting a negative is the same as ADDING! ${a} − (${b}) = ${a} + ${Math.abs(b)}</p>`:`<p class="center muted" style="font-size:13px">Take away ${b} from ${a}.</p>`}`,
+    prompt:`${a} − ${bStr} = ?`, answer:ans};
+}
+
 function genFactorMultiple(kind){
   if(kind==="factors_of"){
     // ask for ONE factor of n (other than 1 and n) — single number, accept any valid factor
@@ -3070,6 +3306,8 @@ function genFracOp(kind){
 function fracSig(q){
   if(q.kind==="word") return "word:"+(q.prompt||"");
   if(q.kind==="samewhole") return "samewhole:"+(q.visual||"").slice(0,80);
+  if(q.kind==="iz_compare") return "iz_compare:"+q._a+"vs"+q._b;
+  if(q.choicesFixed) return q.kind+":"+(q.prompt||"")+":"+q.answer;
   if(q.compare) return q.kind+":"+(q.cmpA!=null?q.cmpA+"vs"+q.cmpB : q.f1.num+"/"+q.f1.den+"vs"+q.f2.num+"/"+q.f2.den);
   if(q.fracOp) return q.kind+":"+q.a.num+"/"+q.a.den+q.sym+q.b.num+"/"+q.b.den;
   if(q.isDecimal) return q.kind+":"+(q.answer.dec!=null?q.answer.dec:q.decVal)+":"+(q.prompt||"");
@@ -3090,6 +3328,7 @@ function genFracSet(kind, n){
   return out;
 }
 function fracCorrect(q, gotNum, gotDen){
+  if(q.choicesFixed){ return (""+gotNum)===q.answer; }  // integer meet: Positive/Negative/Zero
   if(q.compare){ return (""+gotNum).toUpperCase()===q.answer; }
   if(q.yesno){ return (""+gotNum).toLowerCase()===q.answer; }
   if(q.acceptAnyOf){ return q.acceptAnyOf.indexOf(parseInt(gotNum))>=0; }
@@ -3143,11 +3382,25 @@ function fracInputHTML(q, ansFn){
       <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
   }
   if(q.single){
+    if(q.allowNeg){
+      // integers: include a +/- sign toggle since mobile keypads lack a minus key
+      return `<div style="display:flex;gap:10px;justify-content:center;align-items:center">
+          <button class="opt" id="fsign" style="width:64px;height:64px;font-size:30px;font-weight:800" onclick="toggleSign()">+</button>
+          <input id="fnum" type="tel" inputmode="numeric" maxlength="2" style="width:110px;height:64px;font-size:34px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">
+        </div>
+        <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
+    }
     return `<input id="fnum" type="tel" inputmode="numeric" maxlength="3" style="width:120px;height:64px;font-size:34px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">
       <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
   }
   return `<span class="fracInput"><input id="fnum" type="tel" inputmode="numeric" maxlength="3" placeholder="?"><span class="bar"></span><input id="fden" type="tel" inputmode="numeric" maxlength="3" placeholder="?"></span>
     <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
+}
+function toggleSign(){
+  const b=$("fsign"); if(!b) return;
+  b.textContent = b.textContent==="+" ? "−" : "+";
+  b.style.color = b.textContent==="−" ? "#ff8a8a" : "";
+  SND.tap();
 }
 function fracAnswerShown(q){
   if(q.kind==="samewhole") return `${q.answer} is bigger (A=${q._a1}, B=${q._a2})`;
@@ -3160,6 +3413,7 @@ function fracAnswerShown(q){
 }
 // the canonical correct display value for choice-matching
 function fracCorrectLabel(q){
+  if(q.choicesFixed) return q.answer;       // iz_meet: Positive/Negative/Zero
   if(q.compare) return q.answer;            // "A" / "B"
   if(q.yesno) return q.answer;              // "yes" / "no"
   if(q.accept==="decimal") return ""+q.answer.dec;
@@ -3178,6 +3432,7 @@ function fracChoices(q){
   const correct=fracCorrectLabel(q);
   const set=new Set([correct]);
   const out=[];
+  if(q.choicesFixed){ return shuffle(q.choicesFixed.map(o=>({label:o,val:o}))); }  // iz_meet
   if(q.compare){ return shuffle([{label:"A is bigger",val:"A"},{label:"B is bigger",val:"B"}]); }
   if(q.yesno){ return shuffle([{label:"Yes",val:"yes"},{label:"No",val:"no"}]); }
   if(q.accept==="decimal"){
@@ -3189,9 +3444,10 @@ function fracChoices(q){
   }
   if(q.single){
     const n=q.answer;
-    const cands=[n+1,n-1,n+2,n-2,Math.max(0,n*2),Math.max(1,Math.round(n/2))];
-    for(const c of cands){ if(c>=0 && !set.has(""+c)){ set.add(""+c); out.push(""+c); } if(set.size>=4) break; }
-    let bump=3; while(set.size<4){ const c=n+bump; if(c>=0&&!set.has(""+c)){set.add(""+c);out.push(""+c);} bump++; }
+    const allowNeg=!!q.integer;  // integers allow negative distractors
+    const cands=[n+1,n-1,n+2,n-2,n*2,Math.round(n/2), n+3, n-3];
+    for(const c of cands){ if((allowNeg||c>=0) && c!==n && !set.has(""+c)){ set.add(""+c); out.push(""+c); } if(set.size>=4) break; }
+    let bump=3; while(set.size<4){ const c=n+bump; if((allowNeg||c>=0)&&c!==n&&!set.has(""+c)){set.add(""+c);out.push(""+c);} bump++; }
     return shuffle([{label:""+n,val:""+n,correct:true}].concat(out.slice(0,3).map(l=>({label:l,val:l}))));
   }
   // fraction answer: make equivalent-but-different and near-miss distractors
@@ -3215,6 +3471,7 @@ function fracChoices(q){
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 // check a tapped choice value against the question
 function fracChoiceCorrect(q, val){
+  if(q.choicesFixed) return val===q.answer;
   if(q.compare||q.yesno) return val===q.answer;
   if(q.acceptAnyOf) return q.acceptAnyOf.indexOf(parseInt(val))>=0;
   if(q.accept==="decimal") return Math.abs(parseFloat(val)-q.answer.dec)<0.001;
