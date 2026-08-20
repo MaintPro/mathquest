@@ -438,6 +438,18 @@ function stagesFor(levelId){
   if(levelId==="integers"){
     return INTEGER_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
   }
+  if(levelId==="powers"){
+    return POWER_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
+  }
+  if(levelId==="bodmas"){
+    return BODMAS_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
+  }
+  if(levelId==="ratio"){
+    return RATIO_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
+  }
+  if(levelId==="algebra"){
+    return ALGEBRA_STAGES.map(s=>({name:s.name, kind:s.kind, mixed:!!s.mixed}));
+  }
   return [];
 }
 function clearedStage(k,levelId){ return (k.stageProgress&&k.stageProgress[levelId]!=null)?k.stageProgress[levelId]:-1; }
@@ -465,7 +477,11 @@ const PATH = [
   {id:"factors",  name:"Factors & Multiples", icon:"🔑", op:"fm", desc:"HCF, LCM — the keys to fractions"},
   {id:"fracops",  name:"Fraction Operations", icon:"🧮", op:"fo", desc:"Add, subtract, multiply, divide"},
   {id:"decimals", name:"Decimals & %", icon:"💯", op:"dp", desc:"Decimals, percentages & word problems"},
-  {id:"integers", name:"Integers", icon:"➕➖", op:"iz", desc:"Negative numbers & the number line"}
+  {id:"integers", name:"Integers", icon:"➕➖", op:"iz", desc:"Negative numbers & the number line"},
+  {id:"powers",   name:"Powers & Roots", icon:"🔢", op:"pw", desc:"Squares, cubes & square roots"},
+  {id:"bodmas",   name:"Order of Operations", icon:"🧭", op:"bd", desc:"BODMAS — what comes first"},
+  {id:"ratio",    name:"Ratio & Proportion", icon:"⚖️", op:"rp", desc:"Comparing and scaling"},
+  {id:"algebra",  name:"Intro to Algebra", icon:"🔤", op:"al", desc:"Find the missing number"}
 ];
 function levelById(id){ return PATH.find(l=>l.id===id); }
 function nextLevel(id){ const i=PATH.findIndex(l=>l.id===id); return PATH[i+1]||null; }
@@ -595,6 +611,42 @@ const INTEGER_STAGES = [
   {id:"iz_sub",      name:"Subtracting Integers", kind:"iz_sub",      desc:"2 − 5, and 3 − (−2)"},
   // Final
   {id:"iz_mixed",    name:"Integers Master",      kind:"iz_any",      desc:"All mixed", mixed:true}
+];
+
+const POWER_STAGES = [
+  {id:"pw_square",  name:"Square Numbers",     kind:"pw_square",  desc:"5² = 25"},
+  {id:"pw_squarebig",name:"Bigger Squares",    kind:"pw_squarebig",desc:"up to 15²"},
+  {id:"pw_cube",    name:"Cube Numbers",       kind:"pw_cube",    desc:"3³ = 27"},
+  {id:"pw_root",    name:"Square Roots",       kind:"pw_root",    desc:"√49 = 7"},
+  {id:"pw_powof",   name:"Powers of 10",       kind:"pw_powof",   desc:"10³ = 1000"},
+  {id:"pw_mixed",   name:"Powers Master",      kind:"pw_any",     desc:"All mixed", mixed:true}
+];
+
+const BODMAS_STAGES = [
+  {id:"bd_two",     name:"Two Operations",     kind:"bd_two",     desc:"2 + 3 × 4"},
+  {id:"bd_brackets",name:"Brackets First",     kind:"bd_brackets",desc:"(2 + 3) × 4"},
+  {id:"bd_order",   name:"What Comes First?",  kind:"bd_order",   desc:"Pick the first step"},
+  {id:"bd_three",   name:"Three Operations",   kind:"bd_three",   desc:"10 − 2 × 3 + 1"},
+  {id:"bd_power",   name:"With Powers",        kind:"bd_power",   desc:"2 + 3²"},
+  {id:"bd_mixed",   name:"BODMAS Master",      kind:"bd_any",     desc:"All mixed", mixed:true}
+];
+
+const RATIO_STAGES = [
+  {id:"rp_meet",    name:"What's a Ratio?",    kind:"rp_meet",    desc:"3 : 2"},
+  {id:"rp_simplify",name:"Simplify Ratios",    kind:"rp_simplify",desc:"6:4 = 3:2"},
+  {id:"rp_share",   name:"Sharing in a Ratio", kind:"rp_share",   desc:"Split 20 as 3:1"},
+  {id:"rp_equiv",   name:"Equivalent Ratios",  kind:"rp_equiv",   desc:"2:3 = 4:6"},
+  {id:"rp_unit",    name:"Scaling & Recipes",  kind:"rp_unit",    desc:"Scale up amounts"},
+  {id:"rp_mixed",   name:"Ratio Master",       kind:"rp_any",     desc:"All mixed", mixed:true}
+];
+
+const ALGEBRA_STAGES = [
+  {id:"al_meet",    name:"What's a Variable?",  kind:"al_meet",    desc:"x stands for a number"},
+  {id:"al_add",     name:"Solve with + and −",  kind:"al_add",     desc:"x + 5 = 12"},
+  {id:"al_mul",     name:"Solve with × and ÷",  kind:"al_mul",     desc:"3x = 12"},
+  {id:"al_express", name:"Write Expressions",   kind:"al_express", desc:"3 more than n"},
+  {id:"al_substitute",name:"Substitute Values", kind:"al_substitute",desc:"If x=4, find 2x+1"},
+  {id:"al_mixed",   name:"Algebra Master",      kind:"al_any",     desc:"All mixed", mixed:true}
 ];
 
 let session = {}; // active kid + quiz state
@@ -1738,7 +1790,7 @@ function openStage(i){
 }
 function stageLesson(){
   const k=session.kid, lv=session.level, st=session.stage, s=st.def;
-  if(lv.id==="fractions"||lv.id==="fracops"||lv.id==="decimals"||lv.id==="factors"||lv.id==="integers") return fracLesson();
+  if(lv.id==="fractions"||lv.id==="fracops"||lv.id==="decimals"||lv.id==="factors"||lv.id==="integers"||lv.id==="powers"||lv.id==="bodmas"||lv.id==="ratio"||lv.id==="algebra") return fracLesson();
   let body;
   if(s.mixed){
     body=`<p style="font-size:15px;line-height:1.6">This is the big one — <b>all of them mixed together</b>. No single pattern to lean on; you just need to know your ${lv.name.toLowerCase()}. Take your time, and use the tricks you've learned for each one.</p>
@@ -1813,6 +1865,26 @@ function lessonNarration(kind, mixed){
     iz_order:"To order integers, line them up from most negative on the left, to biggest on the right.",
     iz_add:"To add integers, walk along the number line. Start at the first number. Adding a positive moves right, and adding a negative moves left!",
     iz_sub:"When subtracting, taking away moves left. And here's the big trick: subtracting a negative is the same as adding! Two minuses make a plus.",
+    pw_square:"A square number is a number times itself. Five squared means five times five, which is twenty-five.",
+    pw_squarebig:"Keep going with bigger squares. Twelve squared is twelve times twelve.",
+    pw_cube:"A cube number is a number times itself three times. Three cubed is three times three times three, which is twenty-seven.",
+    pw_root:"A square root asks the opposite: what number times itself makes this? The square root of forty-nine is seven.",
+    pw_powof:"Powers of ten are easy! The little number tells you how many zeros. Ten cubed is one thousand.",
+    bd_two:"When a sum has more than one operation, follow the order: brackets, then powers, then multiply and divide, then add and subtract. Remember, multiply before add!",
+    bd_brackets:"Brackets always come first. Do whatever is inside the brackets before anything else.",
+    bd_order:"Which step comes first? Follow BODMAS: brackets, orders, divide and multiply, then add and subtract.",
+    bd_three:"With three operations, do multiply and divide first, then add and subtract from left to right.",
+    bd_power:"Powers come right after brackets, before multiply, add, or subtract. Do the power first!",
+    rp_meet:"A ratio compares amounts, written with a colon. Three blue to two yellow is three to two. Order matters!",
+    rp_simplify:"Simplify a ratio just like a fraction. Divide both sides by the same number.",
+    rp_share:"To share in a ratio, add the parts, divide the total, then multiply.",
+    rp_equiv:"Equivalent ratios: multiply both sides by the same number, just like equivalent fractions.",
+    rp_unit:"Scaling up! If one batch needs three cups, then four batches need three times four, which is twelve.",
+    al_meet:"In algebra, a letter like x just stands for a number we don't know yet. It's a mystery box!",
+    al_add:"To find x, undo what's done to it. Undo plus with minus, and minus with plus.",
+    al_mul:"Three x means three times x. To undo a multiply, divide both sides.",
+    al_express:"We can write words as expressions. Three more than x is x plus three. Three times x is three x.",
+    al_substitute:"Substitute means swap the letter for its value, then work it out.",
     // fraction operations
     add_same:"When the bottoms are the same, just add the tops and keep the bottom!",
     sub_same:"When the bottoms match, subtract the tops and keep the bottom.",
@@ -1990,6 +2062,93 @@ function fracLessonContent(kind){
         <p style="font-size:15px;line-height:1.6;margin:0">⭐ <b>The big trick:</b> subtracting a <b>negative</b> is the same as <b>adding</b>! <br>3 − (−2) = 3 + 2 = <b style="color:#3ddc97">5</b>. Two minuses make a plus!</p>
       </div>`;
   }
+  // ---- POWERS & ROOTS ----
+  if(kind==="pw_square"||kind==="pw_squarebig"){
+    return `<p style="font-size:15px;line-height:1.6">A <b>square number</b> is a number times itself. We write it with a small <b>2</b>.</p>
+      <p style="font-size:20px;text-align:center;margin:12px 0">5² = 5 × 5 = <b style="color:var(--gold2)">25</b></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">It's called "squared" because that many dots make a perfect square shape!</p>`;
+  }
+  if(kind==="pw_cube"){
+    return `<p style="font-size:15px;line-height:1.6">A <b>cube number</b> is a number times itself <b>three</b> times. We write it with a small <b>3</b>.</p>
+      <p style="font-size:20px;text-align:center;margin:12px 0">3³ = 3 × 3 × 3 = <b style="color:var(--gold2)">27</b></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Do it step by step: 3 × 3 = 9, then 9 × 3 = 27.</p>`;
+  }
+  if(kind==="pw_root"){
+    return `<p style="font-size:15px;line-height:1.6">A <b>square root</b> asks the opposite question: what number times itself makes this?</p>
+      <p style="font-size:20px;text-align:center;margin:12px 0">√49 = <b style="color:var(--gold2)">7</b> &nbsp;because&nbsp; 7 × 7 = 49</p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Tip: think through your square numbers to find the match.</p>`;
+  }
+  if(kind==="pw_powof"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Powers of 10</b> are easy — the little number tells you how many <b>zeros</b>.</p>
+      <p style="font-size:18px;text-align:center;margin:12px 0">10² = 100 &nbsp;·&nbsp; 10³ = 1000 &nbsp;·&nbsp; 10⁴ = 10000</p>
+      <p style="font-size:15px;line-height:1.55;margin:0">The power = the number of zeros after the 1.</p>`;
+  }
+  // ---- BODMAS ----
+  if(kind==="bd_two"||kind==="bd_order"){
+    return `<p style="font-size:15px;line-height:1.6">When a sum has more than one operation, we follow an <b>order</b>. This is <b>BODMAS</b>.</p>
+      <p style="font-size:14px;line-height:1.8;text-align:center;margin:10px 0"><b>B</b>rackets → <b>O</b>rders (powers) → <b>D</b>ivide/<b>M</b>ultiply → <b>A</b>dd/<b>S</b>ubtract</p>
+      <p style="font-size:16px;text-align:center;margin:8px 0">2 + 3 × 4 = 2 + 12 = <b style="color:var(--gold2)">14</b><br><span class="muted" style="font-size:13px">(× before +, NOT 5 × 4)</span></p>`;
+  }
+  if(kind==="bd_brackets"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Brackets always come first</b> — do whatever is inside them before anything else.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">(2 + 3) × 4 = 5 × 4 = <b style="color:var(--gold2)">20</b></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Without the brackets it would be 2 + 12 = 14. Brackets change the answer!</p>`;
+  }
+  if(kind==="bd_three"){
+    return `<p style="font-size:15px;line-height:1.6">With three operations, still do <b>× and ÷ first</b>, then + and − from left to right.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">10 − 2 × 3 + 1<br>= 10 − 6 + 1 = <b style="color:var(--gold2)">5</b></p>`;
+  }
+  if(kind==="bd_power"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Orders</b> (powers) come right after brackets — before × ÷ + −.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">2 + 3² = 2 + 9 = <b style="color:var(--gold2)">11</b><br><span class="muted" style="font-size:13px">do the 3² first</span></p>`;
+  }
+  // ---- RATIO ----
+  if(kind==="rp_meet"){
+    return `<p style="font-size:15px;line-height:1.6">A <b>ratio</b> compares amounts. We write it with a colon.</p>
+      <p style="font-size:20px;text-align:center;margin:12px 0">3 blue : 2 yellow → <b style="color:var(--gold2)">3 : 2</b></p>
+      <p style="font-size:15px;line-height:1.55;margin:0">Order matters! 3:2 is not the same as 2:3.</p>`;
+  }
+  if(kind==="rp_simplify"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Simplify a ratio</b> like a fraction — divide both sides by the same number.</p>
+      <p style="font-size:18px;text-align:center;margin:12px 0">6 : 4 &nbsp;(÷2)&nbsp; = <b style="color:var(--gold2)">3 : 2</b></p>`;
+  }
+  if(kind==="rp_share"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Sharing in a ratio:</b> add the parts, divide, then multiply.</p>
+      <p style="font-size:15px;line-height:1.7;text-align:center;margin:10px 0">Share 20 as 3 : 1<br>Parts: 3 + 1 = 4. &nbsp; 20 ÷ 4 = 5 per part.<br>First share = 3 × 5 = <b style="color:var(--gold2)">15</b></p>`;
+  }
+  if(kind==="rp_equiv"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Equivalent ratios</b> — multiply both sides by the same number, just like equivalent fractions.</p>
+      <p style="font-size:18px;text-align:center;margin:12px 0">2 : 3 &nbsp;(×2)&nbsp; = <b style="color:var(--gold2)">4 : 6</b></p>`;
+  }
+  if(kind==="rp_unit"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Scaling</b> — if one batch needs a certain amount, multiply for more batches.</p>
+      <p style="font-size:15px;line-height:1.7;text-align:center;margin:10px 0">1 batch = 3 cups.<br>4 batches = 3 × 4 = <b style="color:var(--gold2)">12 cups</b></p>`;
+  }
+  // ---- ALGEBRA ----
+  if(kind==="al_meet"){
+    return `<p style="font-size:15px;line-height:1.6">In algebra, a <b>letter</b> (like x) just stands for a number we don't know yet. It's a mystery box!</p>
+      <p style="font-size:18px;text-align:center;margin:12px 0">If x = 7, then x is just <b style="color:var(--gold2)">7</b>.</p>`;
+  }
+  if(kind==="al_add"){
+    return `<p style="font-size:15px;line-height:1.6">To find x, <b>undo</b> what's done to it. Undo <b>+</b> with <b>−</b>, and <b>−</b> with <b>+</b>.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">x + 5 = 12<br>x = 12 − 5 = <b style="color:var(--gold2)">7</b></p>`;
+  }
+  if(kind==="al_mul"){
+    return `<p style="font-size:15px;line-height:1.6"><b>3x</b> means 3 × x. To undo a multiply, <b>divide</b> both sides.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">3x = 12<br>x = 12 ÷ 3 = <b style="color:var(--gold2)">4</b></p>`;
+  }
+  if(kind==="al_express"){
+    return `<p style="font-size:15px;line-height:1.6">We can write words as <b>expressions</b>:</p>
+      <ul style="font-size:15px;line-height:1.7;padding-left:20px">
+        <li>"3 more than x" → <b style="color:var(--gold2)">x + 3</b></li>
+        <li>"3 times x" → <b style="color:var(--gold2)">3x</b></li>
+        <li>"3 less than x" → <b style="color:var(--gold2)">x − 3</b></li>
+      </ul>`;
+  }
+  if(kind==="al_substitute"){
+    return `<p style="font-size:15px;line-height:1.6"><b>Substitute</b> means swap the letter for its value, then work it out.</p>
+      <p style="font-size:16px;text-align:center;margin:12px 0">If x = 4, find 2x + 1<br>= 2 × 4 + 1 = 8 + 1 = <b style="color:var(--gold2)">9</b></p>`;
+  }
   if(kind==="factors_of"){
     return `<p style="font-size:15px;line-height:1.6">A <b>factor</b> is a number that divides into another number <b>evenly</b> (no remainder).</p>
       <p style="font-size:15px;text-align:center;margin:12px 0">Factors of <b>12</b>: <b style="color:var(--gold2)">1, 2, 3, 4, 6, 12</b><br>
@@ -2128,7 +2287,7 @@ function fracTestAns(yn){
   else {
     const oneField = q.single || q.accept==="decimal";
     gotN=$("fnum")?$("fnum").value:""; gotD=$("fden")?$("fden").value:"";
-    if(gotN===""||(!oneField && gotD==="")) return toast(q.accept==="decimal"?"Type the decimal first":"Type the fraction first");
+    if(gotN===""||(!oneField && gotD==="")) return toast(q.accept==="decimal"?"Type the decimal first":q.ratioAns?"Fill in both ratio boxes":"Type the fraction first");
     // integer answers: apply the +/- sign toggle
     if(q.allowNeg && $("fsign") && $("fsign").textContent==="−"){ gotN = "-"+gotN; }
   }
@@ -2846,6 +3005,22 @@ function genFrac(kind){
   if(kind==="iz_meet"||kind==="iz_line"||kind==="iz_realworld"||kind==="iz_compare"||kind==="iz_order"||kind==="iz_add"||kind==="iz_sub"){
     return genInteger(kind);
   }
+  if(kind==="pw_any") kind=pick(["pw_square","pw_squarebig","pw_cube","pw_root","pw_powof"]);
+  if(kind==="pw_square"||kind==="pw_squarebig"||kind==="pw_cube"||kind==="pw_root"||kind==="pw_powof"){
+    return genPower(kind);
+  }
+  if(kind==="bd_any") kind=pick(["bd_two","bd_brackets","bd_order","bd_three","bd_power"]);
+  if(kind==="bd_two"||kind==="bd_brackets"||kind==="bd_order"||kind==="bd_three"||kind==="bd_power"){
+    return genBodmas(kind);
+  }
+  if(kind==="rp_any") kind=pick(["rp_meet","rp_simplify","rp_share","rp_equiv","rp_unit"]);
+  if(kind==="rp_meet"||kind==="rp_simplify"||kind==="rp_share"||kind==="rp_equiv"||kind==="rp_unit"){
+    return genRatio(kind);
+  }
+  if(kind==="al_any") kind=pick(["al_meet","al_add","al_mul","al_express","al_substitute"]);
+  if(kind==="al_meet"||kind==="al_add"||kind==="al_mul"||kind==="al_express"||kind==="al_substitute"){
+    return genAlgebra(kind);
+  }
   // ---- Understanding kinds ----
   if(kind==="name" || kind==="shade" || kind==="build" || kind==="parts"){
     const {num,den}=randFrac();
@@ -3098,6 +3273,178 @@ function genInteger(kind){
     prompt:`${a} − ${bStr} = ?`, answer:ans};
 }
 
+// ===================== POWERS & ROOTS =====================
+function genPower(kind){
+  const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+  if(kind==="pw_square"){
+    const n=R(2,12); return {kind, integer:true, single:true,
+      visual:`<div style="font-size:40px;font-weight:800;text-align:center">${n}²</div><p class="center muted" style="font-size:13px">${n}² means ${n} × ${n}</p>`,
+      prompt:`What is ${n}²?`, answer:n*n};
+  }
+  if(kind==="pw_squarebig"){
+    const n=R(11,15); return {kind, integer:true, single:true,
+      visual:`<div style="font-size:40px;font-weight:800;text-align:center">${n}²</div><p class="center muted" style="font-size:13px">${n} × ${n}</p>`,
+      prompt:`What is ${n}²?`, answer:n*n};
+  }
+  if(kind==="pw_cube"){
+    const n=R(2,6); return {kind, integer:true, single:true,
+      visual:`<div style="font-size:40px;font-weight:800;text-align:center">${n}³</div><p class="center muted" style="font-size:13px">${n}³ means ${n} × ${n} × ${n}</p>`,
+      prompt:`What is ${n}³?`, answer:n*n*n};
+  }
+  if(kind==="pw_root"){
+    const n=R(2,15); const sq=n*n; return {kind, integer:true, single:true,
+      visual:`<div style="font-size:40px;font-weight:800;text-align:center">√${sq}</div><p class="center muted" style="font-size:13px">What number times itself makes ${sq}?</p>`,
+      prompt:`What is √${sq}?`, answer:n};
+  }
+  // pw_powof — powers of 10
+  const e=R(1,5); const val=Math.pow(10,e);
+  return {kind:"pw_powof", integer:true, single:true,
+    visual:`<div style="font-size:40px;font-weight:800;text-align:center">10${supDigits(e)}</div><p class="center muted" style="font-size:13px">1 followed by ${e} zero${e>1?'s':''}</p>`,
+    prompt:`What is 10${supDigits(e)}?`, answer:val};
+}
+function supDigits(n){ const map={'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'}; return (''+n).split('').map(d=>map[d]).join(''); }
+
+// ===================== ORDER OF OPERATIONS (BODMAS) =====================
+function genBodmas(kind){
+  const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+  if(kind==="bd_two"){
+    // a + b × c  (multiplication first)
+    const a=R(2,9), b=R(2,6), c=R(2,6);
+    const expr=`${a} + ${b} × ${c}`, ans=a+b*c;
+    return {kind, integer:true, single:true,
+      visual:`<div style="font-size:34px;font-weight:800;text-align:center">${expr}</div><p class="center muted" style="font-size:13px">Do × before +</p>`,
+      prompt:`${expr} = ?`, answer:ans};
+  }
+  if(kind==="bd_brackets"){
+    const a=R(2,8), b=R(2,6), c=R(2,6);
+    const expr=`(${a} + ${b}) × ${c}`, ans=(a+b)*c;
+    return {kind, integer:true, single:true,
+      visual:`<div style="font-size:34px;font-weight:800;text-align:center">${expr}</div><p class="center muted" style="font-size:13px">Do brackets first!</p>`,
+      prompt:`${expr} = ?`, answer:ans};
+  }
+  if(kind==="bd_order"){
+    // conceptual: which step comes first?
+    const forms=[
+      {e:"2 + 3 × 4", first:"3 × 4", others:["2 + 3"]},
+      {e:"(5 + 1) × 2", first:"5 + 1", others:["1 × 2"]},
+      {e:"10 − 6 ÷ 2", first:"6 ÷ 2", others:["10 − 6"]},
+      {e:"4 × 3 + 5", first:"4 × 3", others:["3 + 5"]},
+      {e:"8 + 2²", first:"2²", others:["8 + 2"]}
+    ];
+    const f=pick(forms);
+    const opts=shuffle([f.first, ...f.others]);
+    return {kind, choicesFixed:opts,
+      visual:`<div style="font-size:34px;font-weight:800;text-align:center">${f.e}</div>`,
+      prompt:`In ${f.e}, which step comes FIRST?`, answer:f.first};
+  }
+  if(kind==="bd_three"){
+    // a − b × c + d
+    const a=R(8,15), b=R(2,4), c=R(2,3), d=R(1,5);
+    const expr=`${a} − ${b} × ${c} + ${d}`, ans=a-b*c+d;
+    return {kind, integer:true, single:true, allowNeg:true,
+      visual:`<div style="font-size:30px;font-weight:800;text-align:center">${expr}</div><p class="center muted" style="font-size:13px">× first, then left to right</p>`,
+      prompt:`${expr} = ?`, answer:ans};
+  }
+  // bd_power — a + b²  or  b² − a
+  const b=R(2,6), a=R(1,9);
+  const expr=`${a} + ${b}${supDigits(2)}`, ans=a+b*b;
+  return {kind:"bd_power", integer:true, single:true,
+    visual:`<div style="font-size:34px;font-weight:800;text-align:center">${expr}</div><p class="center muted" style="font-size:13px">Powers before +</p>`,
+    prompt:`${expr} = ?`, answer:ans};
+}
+
+// ===================== RATIO & PROPORTION =====================
+function genRatio(kind){
+  const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+  if(kind==="rp_meet"){
+    // count two groups, express as ratio a:b (given, ask the ratio in simplest? here just read)
+    const a=R(2,6), b=R(2,6);
+    const dots=(n,col)=>Array.from({length:n}).map(()=>`<span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${col};margin:2px"></span>`).join("");
+    return {kind, ratioAns:true, single2:true, a:a, b:b,
+      visual:`<div class="center">${dots(a,'#5ee0ff')}<br>${dots(b,'#ffd23f')}</div><p class="center muted" style="font-size:13px">blue : yellow — type it like ${a}:${b}</p>`,
+      prompt:`Write the ratio of blue to yellow.`, answer:{ra:a, rb:b}};
+  }
+  if(kind==="rp_simplify"){
+    const g=R(2,5); const sa=R(1,4), sb=R(1,4); const a=sa*g, b=sb*g;
+    const sg=gcd(a,b);
+    return {kind, ratioAns:true, single2:true,
+      visual:`<div style="font-size:34px;font-weight:800;text-align:center">${a} : ${b}</div><p class="center muted" style="font-size:13px">Divide both by the same number</p>`,
+      prompt:`Simplify ${a} : ${b} to its simplest form.`, answer:{ra:a/sg, rb:b/sg}};
+  }
+  if(kind==="rp_share"){
+    // share total in ratio a:b, ask for the FIRST share
+    const a=R(1,4), b=R(1,4); const part=R(2,6); const total=(a+b)*part;
+    const firstShare=a*part;
+    return {kind, integer:true, single:true,
+      visual:`<div style="font-size:26px;font-weight:800;text-align:center">Share ${total} in ratio ${a} : ${b}</div><p class="center muted" style="font-size:13px">${a}+${b}=${a+b} parts. How big is the FIRST share (${a} parts)?</p>`,
+      prompt:`Share ${total} in the ratio ${a}:${b}. What is the first share?`, answer:firstShare};
+  }
+  if(kind==="rp_equiv"){
+    // 2:3 = 4:? — find the missing number
+    const a=R(1,5), b=R(1,5); const m=R(2,4);
+    const showA=a*m; const ans=b*m;
+    return {kind, integer:true, single:true,
+      visual:`<div style="font-size:30px;font-weight:800;text-align:center">${a} : ${b}  =  ${showA} : ?</div><p class="center muted" style="font-size:13px">What times ${a} makes ${showA}? Do the same to ${b}.</p>`,
+      prompt:`${a}:${b} = ${showA}:?`, answer:ans};
+  }
+  // rp_unit — scaling a recipe
+  const per=R(2,5), batches=R(2,4); const need=per*batches;
+  const items=pick(["cups of flour","eggs","cookies","spoons of sugar"]);
+  return {kind:"rp_unit", integer:true, single:true,
+    visual:`<div style="font-size:20px;font-weight:700;text-align:center;line-height:1.5">1 batch needs ${per} ${items}.<br>How many for ${batches} batches?</div>`,
+    prompt:`1 batch needs ${per} ${items}. How many for ${batches} batches?`, answer:need};
+}
+
+// ===================== INTRO TO ALGEBRA =====================
+function genAlgebra(kind){
+  const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+  if(kind==="al_meet"){
+    // conceptual: what does x equal here? x + nothing, shown as a box
+    const val=R(2,9);
+    return {kind, integer:true, single:true,
+      visual:`<div style="font-size:30px;font-weight:800;text-align:center">x = ${val}</div><p class="center muted" style="font-size:13px">A letter just stands for a number. What is x?</p>`,
+      prompt:`If x = ${val}, what is x?`, answer:val};
+  }
+  if(kind==="al_add"){
+    // x + b = c  or  x - b = c
+    const x=R(2,12), b=R(1,9);
+    if(Math.random()<0.5){
+      return {kind, integer:true, single:true,
+        visual:`<div style="font-size:34px;font-weight:800;text-align:center">x + ${b} = ${x+b}</div><p class="center muted" style="font-size:13px">What number plus ${b} makes ${x+b}?</p>`,
+        prompt:`x + ${b} = ${x+b}. What is x?`, answer:x};
+    }
+    return {kind, integer:true, single:true,
+      visual:`<div style="font-size:34px;font-weight:800;text-align:center">x − ${b} = ${x}</div><p class="center muted" style="font-size:13px">Undo the minus by adding</p>`,
+      prompt:`x − ${b} = ${x}. What is x?`, answer:x+b};
+  }
+  if(kind==="al_mul"){
+    // a·x = c  (clean division)
+    const a=R(2,9), x=R(2,9); const c=a*x;
+    return {kind, integer:true, single:true,
+      visual:`<div style="font-size:34px;font-weight:800;text-align:center">${a}x = ${c}</div><p class="center muted" style="font-size:13px">${a}x means ${a} × x. Divide to undo.</p>`,
+      prompt:`${a}x = ${c}. What is x?`, answer:x};
+  }
+  if(kind==="al_express"){
+    // write "n more than / times" as expression — multiple choice
+    const n=R(2,6);
+    const forms=[
+      {q:`Which expression means "${n} more than a number x"?`, a:`x + ${n}`, d:[`x − ${n}`,`${n}x`]},
+      {q:`Which expression means "${n} times a number x"?`, a:`${n}x`, d:[`x + ${n}`,`x − ${n}`]},
+      {q:`Which expression means "${n} less than a number x"?`, a:`x − ${n}`, d:[`x + ${n}`,`${n}x`]}
+    ];
+    const f=pick(forms);
+    return {kind, choicesFixed:shuffle([f.a, ...f.d]),
+      visual:`<div style="font-size:18px;font-weight:700;text-align:center;padding:8px">${f.q}</div>`,
+      prompt:f.q, answer:f.a};
+  }
+  // al_substitute — if x=?, find 2x+1 etc.
+  const x=R(2,8), m=R(2,4), add=R(1,6);
+  const ans=m*x+add;
+  return {kind:"al_substitute", integer:true, single:true,
+    visual:`<div style="font-size:28px;font-weight:800;text-align:center">If x = ${x}, find ${m}x + ${add}</div><p class="center muted" style="font-size:13px">${m}x means ${m} × ${x}, then add ${add}</p>`,
+    prompt:`If x = ${x}, what is ${m}x + ${add}?`, answer:ans};
+}
+
 function genFactorMultiple(kind){
   if(kind==="factors_of"){
     // ask for ONE factor of n (other than 1 and n) — single number, accept any valid factor
@@ -3306,6 +3653,7 @@ function genFracOp(kind){
 function fracSig(q){
   if(q.kind==="word") return "word:"+(q.prompt||"");
   if(q.kind==="samewhole") return "samewhole:"+(q.visual||"").slice(0,80);
+  if(q.ratioAns) return q.kind+":"+q.answer.ra+":"+q.answer.rb+":"+(q.prompt||"");
   if(q.kind==="iz_compare") return "iz_compare:"+q._a+"vs"+q._b;
   if(q.choicesFixed) return q.kind+":"+(q.prompt||"")+":"+q.answer;
   if(q.compare) return q.kind+":"+(q.cmpA!=null?q.cmpA+"vs"+q.cmpB : q.f1.num+"/"+q.f1.den+"vs"+q.f2.num+"/"+q.f2.den);
@@ -3328,6 +3676,12 @@ function genFracSet(kind, n){
   return out;
 }
 function fracCorrect(q, gotNum, gotDen){
+  if(q.ratioAns){
+    // ratio answer: two numbers a:b, must match (already-simplest where required)
+    const a=parseInt(gotNum), b=parseInt(gotDen);
+    if(isNaN(a)||isNaN(b)||b===0) return false;
+    return a===q.answer.ra && b===q.answer.rb;
+  }
   if(q.choicesFixed){ return (""+gotNum)===q.answer; }  // integer meet: Positive/Negative/Zero
   if(q.compare){ return (""+gotNum).toUpperCase()===q.answer; }
   if(q.yesno){ return (""+gotNum).toLowerCase()===q.answer; }
@@ -3367,6 +3721,15 @@ function fracIsSimplest(q, gotNum, gotDen){
 }
 /* shared: input UI for a fraction question (handles yes/no, single, fraction) */
 function fracInputHTML(q, ansFn){
+  if(q.ratioAns){
+    // two number boxes separated by a colon
+    return `<div style="display:flex;gap:10px;justify-content:center;align-items:center">
+        <input id="fnum" type="tel" inputmode="numeric" maxlength="3" style="width:80px;height:64px;font-size:32px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">
+        <span style="font-size:36px;font-weight:800;color:var(--ink)">:</span>
+        <input id="fden" type="tel" inputmode="numeric" maxlength="3" style="width:80px;height:64px;font-size:32px;font-weight:800;text-align:center;background:var(--bg2);border:2px solid var(--line);border-radius:14px;color:var(--gold2)">
+      </div>
+      <div style="margin-top:14px"><button class="btn gold" onclick="${ansFn}()">Check</button></div>`;
+  }
   if(q.choicesFixed){
     // integer meet: tappable word choices (Positive / Negative / Zero) — no Check button
     return `<div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap">
@@ -3409,6 +3772,7 @@ function toggleSign(){
   SND.tap();
 }
 function fracAnswerShown(q){
+  if(q.ratioAns) return q.answer.ra+":"+q.answer.rb;
   if(q.choicesFixed) return q.answer;   // iz_meet: Positive/Negative/Zero
   if(q.kind==="samewhole") return `${q.answer} is bigger (A=${q._a1}, B=${q._a2})`;
   if(q.compare) return q.answer==="A"?"A is bigger":"B is bigger";
@@ -3420,6 +3784,7 @@ function fracAnswerShown(q){
 }
 // the canonical correct display value for choice-matching
 function fracCorrectLabel(q){
+  if(q.ratioAns) return q.answer.ra+":"+q.answer.rb;
   if(q.choicesFixed) return q.answer;       // iz_meet: Positive/Negative/Zero
   if(q.compare) return q.answer;            // "A" / "B"
   if(q.yesno) return q.answer;              // "yes" / "no"
@@ -3440,6 +3805,19 @@ function fracChoices(q){
   const set=new Set([correct]);
   const out=[];
   if(q.choicesFixed){ return shuffle(q.choicesFixed.map(o=>({label:o,val:o}))); }  // iz_meet
+  if(q.ratioAns){
+    const corr=q.answer.ra+":"+q.answer.rb;
+    const cands=[
+      (q.answer.rb)+":"+(q.answer.ra),           // swapped
+      (q.answer.ra+1)+":"+(q.answer.rb),
+      (q.answer.ra)+":"+(q.answer.rb+1),
+      (q.answer.ra*2)+":"+(q.answer.rb)
+    ];
+    const set=new Set([corr]); const out=[];
+    for(const c of cands){ if(!set.has(c)){ set.add(c); out.push(c); } if(set.size>=4) break; }
+    let bump=2; while(set.size<4){ const c=(q.answer.ra+bump)+":"+(q.answer.rb+1); if(!set.has(c)){set.add(c);out.push(c);} bump++; }
+    return shuffle([{label:corr,val:corr,correct:true}].concat(out.slice(0,3).map(l=>({label:l,val:l}))));
+  }
   if(q.compare){ return shuffle([{label:"A is bigger",val:"A"},{label:"B is bigger",val:"B"}]); }
   if(q.yesno){ return shuffle([{label:"Yes",val:"yes"},{label:"No",val:"no"}]); }
   if(q.accept==="decimal"){
@@ -3478,6 +3856,7 @@ function fracChoices(q){
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 // check a tapped choice value against the question
 function fracChoiceCorrect(q, val){
+  if(q.ratioAns) return val===(q.answer.ra+":"+q.answer.rb);
   if(q.choicesFixed) return val===q.answer;
   if(q.compare||q.yesno) return val===q.answer;
   if(q.acceptAnyOf) return q.acceptAnyOf.indexOf(parseInt(val))>=0;
